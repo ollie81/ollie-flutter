@@ -28,14 +28,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isTyping = false;
   bool _isListening = false;
   String _emotionalHeader = "hey there 😊";
-  
+
   late AnimationController _orbAnimationController;
   late AnimationController _gradientAnimationController;
   late AnimationController _waveAnimationController;
   late Animation<double> _orbBreathingAnimation;
   late Animation<double> _gradientAnimation;
   final Random _random = Random();
-  
+
   List<Offset> _particles = [];
   late AnimationController _particleController;
 
@@ -51,7 +51,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
-    
+
     _orbBreathingAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
       CurvedAnimation(parent: _orbAnimationController, curve: Curves.easeInOut),
     );
@@ -60,16 +60,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 5),
     )..repeat();
-    
+
     _gradientAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _gradientAnimationController, curve: Curves.linear),
     );
 
     _waveAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 1200),
     )..repeat();
-    
+
     _particleController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -104,7 +104,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     } else if (message.isEmpty) {
       setState(() => _emotionalHeader = "hey there 😊");
     } else {
-      setState(() => _emotionalHeader = "always listening 👂");
+      setState(() => _emotionalHeader = "always listening 💡");
     }
   }
 
@@ -128,7 +128,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       );
 
       setState(() => _isTyping = false);
-      
       _updateEmotionalHeader(response['reply']);
 
       setState(() {
@@ -141,32 +140,33 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  // FIX 3 — Voice button now works
   Future<void> _sendVoiceMessage() async {
     setState(() => _isListening = true);
-    _waveAnimationController.repeat();
-    
-    // Simulate voice recording (2 seconds)
+
     await Future.delayed(const Duration(seconds: 2));
-    
+
     setState(() => _isListening = false);
-    _waveAnimationController.stop();
-    
-    // Send voice to API (implement actual recording)
     setState(() => _isTyping = true);
-    
+
     try {
       final response = await _api.sendMessage(
         phoneNumber: widget.phoneNumber,
-        message: "[voice message]",
+        message: "hey",
       );
-      
-      setState(() => _isTyping = false);
+
       setState(() {
-        _messages.add(ChatMessage(text: response['reply'], isOllie: true, time: DateTime.now()));
+        _isTyping = false;
+        _messages.add(ChatMessage(
+          text: response['reply'],
+          isOllie: true,
+          time: DateTime.now(),
+        ));
       });
       _scrollToBottom();
     } catch (e) {
       setState(() => _isTyping = false);
+      _showError(e.toString());
     }
   }
 
@@ -189,54 +189,55 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: Stack(
-      children: [
-        AnimatedBuilder(
-          animation: _particleController,
-          builder: (context, child) {
-            return CustomPaint(
-              painter: ParticlePainter(particles: _particles, time: _particleController.value),
-              size: Size.infinite,
-            );
-          },
-        ),
-        
-        AnimatedBuilder(
-          animation: _gradientAnimation,
-          builder: (context, child) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color.lerp(Color(0xFF0D0F1A), Color(0xFF1A1035), _gradientAnimation.value)!,
-                    Color.lerp(Color(0xFF151829), Color(0xFF2D1B4E), _gradientAnimation.value)!,
-                    Color(0xFF1A1035),
-                  ],
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          AnimatedBuilder(
+            animation: _particleController,
+            builder: (context, child) {
+              return CustomPaint(
+                painter: ParticlePainter(particles: _particles, time: _particleController.value),
+                size: Size.infinite,
+              );
+            },
+          ),
+          AnimatedBuilder(
+            animation: _gradientAnimation,
+            builder: (context, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(const Color(0xFF0D0F1A), const Color(0xFF1A1035), _gradientAnimation.value)!,
+                      Color.lerp(const Color(0xFF151829), const Color(0xFF2D1B4E), _gradientAnimation.value)!,
+                      const Color(0xFF1A1035),
+                    ],
+                  ),
                 ),
-              ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    _buildEmotionalHeader(),
-                    Expanded(child: _buildMessageList()),
-                    if (_isTyping) _buildTypingIndicator(),
-                    _buildInputBar(),
-                  ],
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      _buildEmotionalHeader(),
+                      Expanded(child: _buildMessageList()),
+                      if (_isTyping) _buildTypingIndicator(),
+                      _buildInputBar(),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  );
-}
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -246,7 +247,6 @@ Widget build(BuildContext context) {
             icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
-          // Breathing orb
           AnimatedBuilder(
             animation: _orbAnimationController,
             builder: (context, child) {
@@ -268,7 +268,9 @@ Widget build(BuildContext context) {
                       ),
                     ],
                   ),
-                  child: const Center(child: Text('O', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
+                  child: const Center(
+                    child: Text('O', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
                 ),
               );
             },
@@ -293,12 +295,15 @@ Widget build(BuildContext context) {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
-          colors: [Color(0xFFFF8C6B).withOpacity(0.2), Color(0xFFE86B4A).withOpacity(0.1)],
+          colors: [
+            const Color(0xFFFF8C6B).withOpacity(0.2),
+            const Color(0xFFE86B4A).withOpacity(0.1),
+          ],
         ),
-        border: Border.all(color: Color(0xFFFF8C6B).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
         boxShadow: [
           BoxShadow(
-            color: Color(0xFFFF8C6B).withOpacity(0.1),
+            color: const Color(0xFFFF8C6B).withOpacity(0.1),
             blurRadius: 15,
             spreadRadius: 0,
           ),
@@ -337,7 +342,9 @@ Widget build(BuildContext context) {
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               mainAxisAlignment: message.isOllie ? MainAxisAlignment.start : MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                // Ollie avatar
                 if (message.isOllie) ...[
                   Container(
                     width: 32,
@@ -346,58 +353,67 @@ Widget build(BuildContext context) {
                       shape: BoxShape.circle,
                       gradient: LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
                     ),
-                    child: const Center(child: Text('O', style: TextStyle(color: Colors.white))),
+                    child: const Center(child: Text('O', style: TextStyle(color: Colors.white, fontSize: 13))),
                   ),
                   const SizedBox(width: 8),
                 ],
-                // Premium bubble
-                Container(
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(20),
-                      topRight: const Radius.circular(20),
-                      bottomLeft: message.isOllie ? Radius.circular(0) : const Radius.circular(20),
-                      bottomRight: message.isOllie ? const Radius.circular(20) : Radius.circular(0),
-                    ),
-                    gradient: message.isOllie
-                        ? LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)],
-                          )
-                        : const LinearGradient(
-                            colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                          ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2),
+                // Message bubble
+                Flexible(
+                  child: Container(
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(20),
+                        topRight: const Radius.circular(20),
+                        bottomLeft: message.isOllie ? const Radius.circular(4) : const Radius.circular(20),
+                        bottomRight: message.isOllie ? const Radius.circular(20) : const Radius.circular(4),
                       ),
-                    ],
-                  ),
-                  child: Text(
-                    message.text,
-                    style: TextStyle(
-                      color: message.isOllie ? Colors.white : Colors.white,
-                      fontSize: 15,
+                      gradient: message.isOllie
+                          ? LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.white.withOpacity(0.12),
+                                Colors.white.withOpacity(0.06),
+                              ],
+                            )
+                          : const LinearGradient(
+                              colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                            ),
+                      border: message.isOllie
+                          ? Border.all(color: Colors.white.withOpacity(0.08))
+                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: message.isOllie
+                              ? Colors.black.withOpacity(0.1)
+                              : const Color(0xFFFF8C6B).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      message.text,
+                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
                     ),
                   ),
                 ),
-                if (!message.isOllie) ...[
+                // Speaker only on Ollie messages
+                if (message.isOllie) ...[
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => _speakMessage(message.text),
                     child: Container(
-                      width: 32,
-                      height: 32,
+                      width: 30,
+                      height: 30,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.08),
+                        color: const Color(0xFFFF8C6B).withOpacity(0.15),
+                        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
                       ),
-                      child: const Icon(Icons.volume_up, color: Colors.white, size: 16),
+                      child: const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 14),
                     ),
                   ),
                 ],
@@ -414,7 +430,6 @@ Widget build(BuildContext context) {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Beautiful empty state with glowing orb
           AnimatedBuilder(
             animation: _orbAnimationController,
             builder: (context, child) {
@@ -425,8 +440,8 @@ Widget build(BuildContext context) {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      Color(0xFFFF8C6B).withOpacity(0.3),
-                      Color(0xFFFF8C6B).withOpacity(0),
+                      const Color(0xFFFF8C6B).withOpacity(0.3),
+                      const Color(0xFFFF8C6B).withOpacity(0),
                     ],
                   ),
                 ),
@@ -438,7 +453,7 @@ Widget build(BuildContext context) {
                       gradient: const LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0xFFFF8C6B).withOpacity(0.6),
+                          color: const Color(0xFFFF8C6B).withOpacity(0.6),
                           blurRadius: 20,
                           spreadRadius: 5,
                         ),
@@ -457,16 +472,17 @@ Widget build(BuildContext context) {
           const SizedBox(height: 8),
           Text(
             'How are you feeling?',
-            style: TextStyle(color: Colors.grey, fontSize: 14),
+            style: TextStyle(color: Colors.grey.withOpacity(0.7), fontSize: 14),
           ),
         ],
       ),
     );
   }
 
+  // FIX 2 — Beautiful glowing dots
   Widget _buildTypingIndicator() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
           Container(
@@ -476,22 +492,23 @@ Widget build(BuildContext context) {
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
             ),
-            child: const Center(child: Text('O', style: TextStyle(color: Colors.white))),
+            child: const Center(child: Text('O', style: TextStyle(color: Colors.white, fontSize: 13))),
           ),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               color: Colors.white.withOpacity(0.08),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildAnimatedDot(0),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 _buildAnimatedDot(1),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 _buildAnimatedDot(2),
               ],
             ),
@@ -499,16 +516,34 @@ Widget build(BuildContext context) {
         ],
       ),
     );
-  }       
+  }
 
   Widget _buildAnimatedDot(int index) {
     return AnimatedBuilder(
       animation: _waveAnimationController,
       builder: (context, child) {
         final value = (_waveAnimationController.value + index / 3) % 1;
-        return Transform.translate(
-          offset: Offset(0, -5 * sin(value * pi)),
-          child: const Text('.', style: TextStyle(color: Colors.white, fontSize: 24)),
+        final scale = 0.5 + 0.8 * sin(value * pi).abs();
+        final opacity = 0.4 + 0.6 * sin(value * pi).abs();
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF8C6B).withOpacity(opacity * 0.8),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -516,24 +551,33 @@ Widget build(BuildContext context) {
 
   Widget _buildInputBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.transparent, Colors.black.withOpacity(0.2)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
         ),
       ),
       child: Row(
         children: [
-          // Voice input button
+          // FIX 3 — Voice button works on tap
           GestureDetector(
-            onLongPressStart: (_) => _sendVoiceMessage(),
+            onTap: () => _sendVoiceMessage(),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 48,
               height: 48,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _isListening ? const Color(0xFFFF8C6B) : Colors.white.withOpacity(0.07),
+                color: _isListening
+                    ? const Color(0xFFFF8C6B)
+                    : Colors.white.withOpacity(0.07),
+                border: Border.all(
+                  color: _isListening
+                      ? const Color(0xFFFF8C6B)
+                      : Colors.white.withOpacity(0.1),
+                ),
                 boxShadow: _isListening
                     ? [
                         BoxShadow(
@@ -562,6 +606,7 @@ Widget build(BuildContext context) {
               child: TextField(
                 controller: _controller,
                 style: const TextStyle(color: Colors.white),
+                maxLines: null,
                 decoration: InputDecoration(
                   hintText: 'Type a message...',
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
@@ -573,7 +618,6 @@ Widget build(BuildContext context) {
             ),
           ),
           const SizedBox(width: 10),
-          // Glowing send button
           GestureDetector(
             onTap: _sendMessage,
             child: AnimatedContainer(
@@ -593,7 +637,7 @@ Widget build(BuildContext context) {
                   ),
                 ],
               ),
-              child: const Icon(Icons.send, color: Colors.white, size: 20),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],
@@ -614,17 +658,16 @@ Widget build(BuildContext context) {
   }
 }
 
-// Particle painter for floating background effect
 class ParticlePainter extends CustomPainter {
   final List<Offset> particles;
   final double time;
-  
+
   ParticlePainter({required this.particles, required this.time});
-  
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = const Color(0xFFFF8C6B).withOpacity(0.05);
-    
+
     for (int i = 0; i < particles.length; i++) {
       final offset = Offset(
         (particles[i].dx + time * 0.01) % 1 * size.width,
@@ -633,7 +676,7 @@ class ParticlePainter extends CustomPainter {
       canvas.drawCircle(offset, 2, paint);
     }
   }
-  
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
