@@ -9,7 +9,7 @@ class ApiService {
   static const _storage = FlutterSecureStorage();
 
   // ============================================================
-  // TOKEN HELPERS
+  // TOKEN STORAGE
   // ============================================================
 
   Future<void> saveTokens({
@@ -29,87 +29,90 @@ class ApiService {
   }
 
   Future<void> clearTokens() async {
-    await _storage.deleteAll();
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
   }
 
-  Future<String?> getValidAccessToken() async {
-    return await _storage.read(key: 'access_token');
+  // ============================================================
+  // AUTH HEADERS
+  // ============================================================
+
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await getAccessToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
   }
+
+  // ============================================================
+  // TOKEN REFRESH
+  // ============================================================
 
   Future<bool> refreshAccessToken() async {
     final refreshToken = await getRefreshToken();
     if (refreshToken == null) return false;
 
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/refresh'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': refreshToken}),
-      );
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh_token': refreshToken}),
+    );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        await saveTokens(
-          accessToken: data['access_token'],
-          refreshToken: data['refresh_token'],
-        );
-        return true;
-      } else {
-        await clearTokens();
-        return false;
-      }
-    } catch (e) {
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await saveTokens(
+        accessToken: data['access_token'],
+        refreshToken: data['refresh_token'],
+      );
+      return true;
+    } else {
+      await clearTokens();
       return false;
     }
   }
 
-  // Makes authenticated requests, auto-refreshes on 401
-  Future<http.Response> _authRequest(
-    String method,
-    String path, {
+  // ============================================================
+  // SMART REQUEST — auto retry with refresh if token expired
+  // ============================================================
+
+  Future<http.Response> _authRequest({
+    required String method,
+    required String endpoint,
     Map<String, dynamic>? body,
   }) async {
-    String? token = await getValidAccessToken();
-
-    final headers = {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
+    final headers = await _authHeaders();
 
     http.Response response;
 
     if (method == 'POST') {
       response = await http.post(
-        Uri.parse('$baseUrl$path'),
+        Uri.parse('$baseUrl$endpoint'),
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       );
     } else {
       response = await http.get(
-        Uri.parse('$baseUrl$path'),
+        Uri.parse('$baseUrl$endpoint'),
         headers: headers,
       );
     }
 
-    // Token expired — refresh and retry once
+    // If token expired — refresh and retry once
     if (response.statusCode == 401) {
       final refreshed = await refreshAccessToken();
       if (refreshed) {
-        token = await getValidAccessToken();
-        final retryHeaders = {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        };
+        final newHeaders = await _authHeaders();
         if (method == 'POST') {
           response = await http.post(
-            Uri.parse('$baseUrl$path'),
-            headers: retryHeaders,
+            Uri.parse('$baseUrl$endpoint'),
+            headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
           );
         } else {
           response = await http.get(
-            Uri.parse('$baseUrl$path'),
-            headers: retryHeaders,
+            Uri.parse('$baseUrl$endpoint'),
+            headers: newHeaders,
           );
         }
       }
@@ -123,13 +126,12 @@ class ApiService {
   // ============================================================
 
   Future<Map<String, dynamic>> sendMessage({
-    required String phoneNumber,
     required String message,
     List<Map<String, String>> history = const [],
   }) async {
     final response = await _authRequest(
-      'POST',
-      '/chat',
+      method: 'POST',
+      endpoint: '/chat',
       body: {
         'message': message,
         'history': history,
@@ -148,18 +150,18 @@ class ApiService {
   }
 
   Future<File?> sendVoiceMessage({
-    required String phoneNumber,
     required String message,
   }) async {
     final response = await _authRequest(
-      'POST',
-      '/speak',
+      method: 'POST',
+      endpoint: '/speak',
       body: {'message': message},
     );
 
     if (response.statusCode == 200) {
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/ollie_voice_${DateTime.now().millisecondsSinceEpoch}.mp3');
+      final file = File(
+          '${tempDir.path}/ollie_voice_${DateTime.now().millisecondsSinceEpoch}.mp3');
       await file.writeAsBytes(response.bodyBytes);
       return file;
     } else if (response.statusCode == 429) {
@@ -293,42 +295,41 @@ class ApiService {
     final token = await getAccessToken();
     return token != null;
   }
-}
 
-// ============================================================
-// PREMIUM
-// ============================================================
+  // ============================================================
+  // PREMIUM
+  // ============================================================
 
-Future<Map<String, dynamic>> checkPremiumStatus(String phoneNumber) async {
-  final response = await http.get(
-    Uri.parse('${ApiService.baseUrl}/premium/status/$phoneNumber'),
-  );
+  Future<Map<String, dynamic>> checkPremiumStatus() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/premium/status/me',
+    );
 
-  if (response.statusCode == 200) {
-    return jsonDecode(response.body);
-  } else {
-    return {'is_premium': false};
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      return {'is_premium': false};
+    }
   }
-}
 
-Future<Map<String, dynamic>> activatePremium({
-  required String phoneNumber,
-  required String planType,
-  required int expiryDays,
-}) async {
-  final response = await http.post(
-    Uri.parse('${ApiService.baseUrl}/premium/activate'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({
-      'phone_number': phoneNumber,
-      'plan_type': planType,
-      'expiry_days': expiryDays,
-    }),
-  );
+  Future<Map<String, dynamic>> activatePremium({
+    required String planType,
+    required int expiryDays,
+  }) async {
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/premium/activate',
+      body: {
+        'plan_type': planType,
+        'expiry_days': expiryDays,
+      },
+    );
 
-  if (response.statusCode == 200) {
-    return jsonDecode(response.body);
-  } else {
-    throw Exception('Failed to activate premium');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to activate premium');
+    }
   }
 }
