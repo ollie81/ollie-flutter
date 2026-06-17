@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,10 +12,11 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _otpController = TextEditingController();
-  bool _isOtpSent = false;
+  final TextEditingController _passwordController = TextEditingController();
+  final ApiService _api = ApiService();
+
   bool _isLoading = false;
-  String _generatedOtp = '';
+  bool _isNewUser = false;
 
   @override
   void initState() {
@@ -23,58 +25,59 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final phoneNumber = prefs.getString('phoneNumber');
-    if (phoneNumber != null && phoneNumber.isNotEmpty) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phoneNumber)),
-        );
-      }
+    final loggedIn = await _api.isLoggedIn();
+    if (loggedIn && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      final phoneNumber = prefs.getString('phoneNumber') ?? '';
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phoneNumber)),
+      );
     }
   }
 
-  void _sendOtp() {
-    if (_phoneController.text.trim().length < 10) return;
+  Future<void> _submit() async {
+    final phone = _phoneController.text.trim();
+    final password = _passwordController.text.trim();
 
-    _generatedOtp = '123456';
-    
-    setState(() {
-      _isOtpSent = true;
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('OTP sent to ${_phoneController.text.trim()} (Demo: 123456)'),
-        backgroundColor: const Color(0xFFFF8C6B),
-      ),
-    );
-  }
-
-  Future<void> _verifyOtp() async {
-    if (_otpController.text.trim() != _generatedOtp) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Wrong OTP'), backgroundColor: Colors.red),
-      );
+    if (phone.length < 10) {
+      _showError('Enter a valid phone number');
+      return;
+    }
+    if (password.length < 6) {
+      _showError('Password must be at least 6 characters');
       return;
     }
 
     setState(() => _isLoading = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('phoneNumber', _phoneController.text.trim());
+    try {
+      if (_isNewUser) {
+        await _api.signup(phoneNumber: phone, password: password);
+      } else {
+        await _api.login(phoneNumber: phone, password: password);
+      }
 
-    setState(() => _isLoading = false);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('phoneNumber', phone);
 
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(phoneNumber: _phoneController.text.trim()),
-        ),
-      );
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phone)),
+        );
+      }
+    } catch (e) {
+      _showError(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   @override
@@ -94,6 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Avatar
                 Container(
                   width: 100,
                   height: 100,
@@ -114,6 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
+
                 const Text(
                   'Welcome to Ollie',
                   style: TextStyle(
@@ -131,126 +136,110 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-                if (!_isOtpSent) ...[
-                  Container(
+
+                // Phone field
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: Colors.white.withOpacity(0.07),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter phone number',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      prefixIcon: Icon(Icons.phone_android,
+                          color: Colors.white.withOpacity(0.5)),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Password field
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: Colors.white.withOpacity(0.07),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter password',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      prefixIcon: Icon(Icons.lock_outline,
+                          color: Colors.white.withOpacity(0.5)),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Submit button
+                GestureDetector(
+                  onTap: _isLoading ? null : _submit,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(28),
-                      color: Colors.white.withOpacity(0.07),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    ),
-                    child: TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Enter phone number',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                        prefixIcon: Icon(Icons.phone_android, color: Colors.white.withOpacity(0.5)),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: _sendOtp,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFF8C6B).withOpacity(0.4),
+                          blurRadius: 12,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF8C6B).withOpacity(0.4),
-                            blurRadius: 12,
-                          ),
-                        ],
-                      ),
-                      child: const Text(
-                        'Send OTP',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                ] else ...[
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      color: Colors.white.withOpacity(0.07),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    ),
-                    child: TextField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Enter 6-digit OTP',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                        prefixIcon: Icon(Icons.lock_open, color: Colors.white.withOpacity(0.5)),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: _verifyOtp,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF8C6B).withOpacity(0.4),
-                            blurRadius: 12,
-                          ),
-                        ],
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
+                    child: _isLoading
+                        ? const Center(
+                            child: SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: Colors.white,
                               ),
-                            )
-                          : const Text(
-                              'Verify & Continue',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
                             ),
+                          )
+                        : Text(
+                            _isNewUser ? 'Create Account' : 'Login',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Toggle login/signup
+                GestureDetector(
+                  onTap: () => setState(() => _isNewUser = !_isNewUser),
+                  child: Text(
+                    _isNewUser
+                        ? 'Already have an account? Login'
+                        : "Don't have an account? Sign up",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 14,
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isOtpSent = false;
-                        _otpController.clear();
-                      });
-                    },
-                    child: Text(
-                      'Change number',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                    ),
-                  ),
-                ],
+                ),
               ],
             ),
           ),
