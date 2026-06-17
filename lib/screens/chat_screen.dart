@@ -123,9 +123,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     try {
       final response = await _api.sendMessage(
-        phoneNumber: widget.phoneNumber,
-        message: userMessage,
-      );
+  message: userMessage,
+);
 
       setState(() => _isTyping = false);
       _updateEmotionalHeader(response['reply']);
@@ -150,11 +149,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() => _isTyping = true);
 
     try {
-      final response = await _api.sendMessage(
-        phoneNumber: widget.phoneNumber,
-        message: "hey",
-      );
-
+    final response = await _api.sendMessage(
+  message: "hey",
+);
       setState(() {
         _isTyping = false;
         _messages.add(ChatMessage(
@@ -173,9 +170,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Future<void> _speakMessage(String message) async {
     try {
       final audioFile = await _api.sendVoiceMessage(
-        phoneNumber: widget.phoneNumber,
-        message: message,
-      );
+  message: message,
+);
       if (audioFile != null) {
         await _audioPlayer.play(DeviceFileSource(audioFile.path));
       }
