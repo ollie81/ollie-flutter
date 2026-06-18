@@ -97,7 +97,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Avatar
                 Container(
                   width: 100,
                   height: 100,
@@ -118,7 +117,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-
                 const Text(
                   'Welcome to Ollie',
                   style: TextStyle(
@@ -136,8 +134,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-
-                // Phone field
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(28),
@@ -151,17 +147,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: 'Enter phone number',
                       hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                      prefixIcon: Icon(Icons.phone_android,
-                          color: Colors.white.withOpacity(0.5)),
+                      prefixIcon: Icon(Icons.phone_android, color: Colors.white.withOpacity(0.5)),
                       border: InputBorder.none,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Password field
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(28),
@@ -175,17 +167,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: 'Enter password',
                       hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                      prefixIcon: Icon(Icons.lock_outline,
-                          color: Colors.white.withOpacity(0.5)),
+                      prefixIcon: Icon(Icons.lock_outline, color: Colors.white.withOpacity(0.5)),
                       border: InputBorder.none,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Submit button
                 GestureDetector(
                   onTap: _isLoading ? null : _submit,
                   child: Container(
@@ -226,8 +214,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Toggle login/signup
                 GestureDetector(
                   onTap: () => setState(() => _isNewUser = !_isNewUser),
                   child: Text(
