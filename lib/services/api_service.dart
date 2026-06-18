@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://ollie-api-1-production.up.railway.app';
+  static const String baseUrl = 'https://ollie-api-1-production.up.railway.app';
   static const _storage = FlutterSecureStorage();
 
   // ============================================================
