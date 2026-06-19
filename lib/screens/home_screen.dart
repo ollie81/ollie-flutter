@@ -1,6 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 import 'chat_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String phoneNumber;
@@ -13,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final ApiService _api = ApiService();
 
   @override
   void initState() {
@@ -37,6 +41,121 @@ class _HomeScreenState extends State<HomeScreen>
         pageBuilder: (_, animation, __) => FadeTransition(
           opacity: animation,
           child: ChatScreen(phoneNumber: widget.phoneNumber),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF151829),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Log out?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'You will need to log in again to talk to Ollie.',
+          style: TextStyle(color: Colors.white.withOpacity(0.6)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Log out',
+              style: TextStyle(
+                color: Color(0xFFFF8C6B),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _api.logout();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      }
+    }
+  }
+
+  void _showMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF151829),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              widget.phoneNumber,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                _logout();
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.red.withOpacity(0.1),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.logout_rounded, color: Colors.red, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Log out',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );
@@ -97,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen>
                 Text(
                   '$greeting 👋',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
+                    color: Colors.white.withOpacity(0.55),
                     fontSize: 13,
                     letterSpacing: 0.4,
                   ),
@@ -117,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen>
                 Text(
                   'Ollie is here to talk, listen, and stay with you.',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
+                    color: Colors.white.withOpacity(0.55),
                     fontSize: 14,
                     height: 1.4,
                   ),
@@ -126,9 +245,13 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           const SizedBox(width: 12),
-          _glassIconButton(
-            icon: Icons.favorite_rounded,
-            tint: const Color(0xFFFF8C6B),
+          // Profile/menu button — now works
+          GestureDetector(
+            onTap: _showMenu,
+            child: _glassIconButton(
+              icon: Icons.person_outline_rounded,
+              tint: const Color(0xFFFF8C6B),
+            ),
           ),
         ],
       ),
@@ -162,20 +285,20 @@ class _HomeScreenState extends State<HomeScreen>
                           center: const Alignment(-0.3, -0.3),
                           radius: 0.9,
                           colors: [
-                            const Color(0xFFFFD1BE).withValues(alpha: 0.95),
-                            const Color(0xFFFF9F7A).withValues(alpha: 0.9),
-                            const Color(0xFFE86B4A).withValues(alpha: 0.95),
-                            const Color(0xFFB53E2D).withValues(alpha: 0.95),
+                            const Color(0xFFFFD1BE).withOpacity(0.95),
+                            const Color(0xFFFF9F7A).withOpacity(0.9),
+                            const Color(0xFFE86B4A).withOpacity(0.95),
+                            const Color(0xFFB53E2D).withOpacity(0.95),
                           ],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFF8C6B).withValues(alpha: glow),
+                            color: const Color(0xFFFF8C6B).withOpacity(glow),
                             blurRadius: 50,
                             spreadRadius: 18,
                           ),
                           BoxShadow(
-                            color: const Color(0xFFFF5C93).withValues(alpha: 0.18),
+                            color: const Color(0xFFFF5C93).withOpacity(0.18),
                             blurRadius: 80,
                             spreadRadius: 28,
                           ),
@@ -190,8 +313,8 @@ class _HomeScreenState extends State<HomeScreen>
                         gradient: RadialGradient(
                           center: const Alignment(-0.2, -0.2),
                           colors: [
-                            Colors.white.withValues(alpha: 0.30),
-                            Colors.white.withValues(alpha: 0.08),
+                            Colors.white.withOpacity(0.30),
+                            Colors.white.withOpacity(0.08),
                             Colors.transparent,
                           ],
                         ),
@@ -208,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen>
                         Text(
                           'Tap to chat',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
+                            color: Colors.white.withOpacity(0.85),
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.2,
@@ -263,7 +386,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF8C6B).withValues(alpha: 0.35),
+              color: const Color(0xFFFF8C6B).withOpacity(0.35),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -301,9 +424,9 @@ class _HomeScreenState extends State<HomeScreen>
       height: 46,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: 0.08),
+        color: Colors.white.withOpacity(0.08),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
+          color: Colors.white.withOpacity(0.10),
         ),
       ),
       child: Icon(icon, color: tint, size: 20),
@@ -316,9 +439,9 @@ class _HomeScreenState extends State<HomeScreen>
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          color: Colors.white.withValues(alpha: 0.06),
+          color: Colors.white.withOpacity(0.06),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: Colors.white.withOpacity(0.08),
           ),
         ),
         child: Row(
@@ -327,13 +450,13 @@ class _HomeScreenState extends State<HomeScreen>
             Icon(
               icon,
               size: 15,
-              color: Colors.white.withValues(alpha: 0.75),
+              color: Colors.white.withOpacity(0.75),
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.78),
+                color: Colors.white.withOpacity(0.78),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -404,7 +527,7 @@ class _FloatingParticlesState extends State<_FloatingParticles>
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Colors.white.withValues(alpha: 0.10),
+          color: Colors.white.withOpacity(0.10),
         ),
       ),
     );
