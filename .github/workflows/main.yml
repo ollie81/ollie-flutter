@@ -25,4 +25,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ollie-apk
+
+- name: Get SHA-1 fingerprint
+  run: |
+    keytool -keystore ~/.android/debug.keystore \
+    -list -v \
+    -alias androiddebugkey \
+    -storepass android \
+    -keypass android
+
+
+          
           path: build/app/outputs/flutter-apk/
