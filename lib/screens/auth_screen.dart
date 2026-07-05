@@ -148,6 +148,15 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
+  // ============================================================
+  // GOOGLE LOGIN
+  // ============================================================
+
+  Future<void> _handleGoogleLogin() async {
+    // TODO: Implement Google Sign-In
+    // Will add after dependencies are installed
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -331,6 +340,75 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // DIVIDER + GOOGLE BUTTON (only for login/signup)
+                  if (_mode != AuthMode.forgot) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color: Colors.white.withOpacity(0.15),
+                            thickness: 1,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'or continue with',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.3),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color: Colors.white.withOpacity(0.15),
+                            thickness: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Google Sign-In Button
+                    GestureDetector(
+                      onTap: _handleGoogleLogin,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          color: Colors.white.withOpacity(0.07),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image.network(
+                              'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                              height: 24,
+                              width: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _mode == AuthMode.login
+                                  ? 'Sign in with Google'
+                                  : 'Sign up with Google',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   // Switch login/signup
                   if (_mode != AuthMode.forgot)
