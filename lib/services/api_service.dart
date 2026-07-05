@@ -279,6 +279,51 @@ class ApiService {
     }
   }
 
+  // ============================================================
+  // GOOGLE LOGIN
+  // ============================================================
+
+  Future<Map<String, dynamic>> googleLogin({required String idToken}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/google'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'id_token': idToken}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await saveTokens(
+        accessToken: data['access_token'],
+        refreshToken: data['refresh_token'],
+      );
+      return data;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail']);
+    }
+  }
+
+  // ============================================================
+  // AUTO-LOGIN
+  // ============================================================
+
+  Future<Map<String, dynamic>?> autoLogin() async {
+    final token = await getAccessToken();
+    if (token == null) return null;
+
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/auth/verify',
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      await clearTokens();
+      return null;
+    }
+  }
+
   Future<bool> checkUserExists(String phoneNumber) async {
     final response = await http.get(
       Uri.parse('$baseUrl/auth/check/$phoneNumber'),
