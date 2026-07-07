@@ -22,7 +22,6 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final AudioPlayer _audioPlayer = AudioPlayer();
   final ApiService _api = ApiService();
 
   List<ChatMessage> _messages = [];
@@ -33,10 +32,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // ============================================================
   // AD-REWARD STATE
   // ============================================================
-  // TEST unit ID below — this is Google's official test rewarded
-  // ad unit, safe to ship during development. Swap it for your
-  // real AdMob rewarded ad unit ID before public release, or you
-  // won't earn real revenue and Google may flag test traffic.
   static const String _rewardedAdUnitId =
       'ca-app-pub-3940256099942544/5224354917';
 
@@ -142,9 +137,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     await _requestOllieReply(userMessage);
   }
 
-  /// Actually calls the backend for a reply. Split out from
-  /// _sendMessage so it can be retried after watching a
-  /// rewarded ad, without re-adding the user's message twice.
   Future<void> _requestOllieReply(String userMessage) async {
     try {
       final response = await _api.sendMessage(message: userMessage);
@@ -251,7 +243,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  // TODO: navigate to your premium/subscription screen
                 },
                 child: Text(
                   'or subscribe for unlimited messages',
@@ -275,7 +266,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
-        _loadRewardedAd(); // preload the next one
+        _loadRewardedAd();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();
@@ -297,42 +288,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  // FIX 3 — Voice button now works
-  Future<void> _sendVoiceMessage() async {
-    setState(() => _isListening = true);
+  // ============================================================
+  // VOICE — REMOVED
+  // ============================================================
 
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() => _isListening = false);
-    setState(() => _isTyping = true);
-
-    try {
-      final response = await _api.sendMessage(message: "hey");
-      setState(() {
-        _isTyping = false;
-        _messages.add(ChatMessage(
-          text: response['reply'],
-          isOllie: true,
-          time: DateTime.now(),
-        ));
-      });
-      _scrollToBottom();
-    } catch (e) {
-      setState(() => _isTyping = false);
-      _showError(e.toString());
-    }
-  }
-
-  Future<void> _speakMessage(String message) async {
-    try {
-      final audioFile = await _api.sendVoiceMessage(message: message);
-      if (audioFile != null) {
-        await _audioPlayer.play(DeviceFileSource(audioFile.path));
-      }
-    } catch (e) {
-      _showError(e.toString());
-    }
-  }
+  // Voice completely removed — no mic, no speaker
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -550,23 +510,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                // Speaker only on Ollie messages
-                if (message.isOllie) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => _speakMessage(message.text),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFFFF8C6B).withOpacity(0.15),
-                        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
-                      ),
-                      child: const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 14),
-                    ),
-                  ),
-                ],
+                // ============================================================
+                // SPEAKER BUTTON REMOVED — no voice on Ollie messages
+                // ============================================================
               ],
             ),
           ),
@@ -629,7 +575,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  // FIX 2 — Beautiful glowing dots
   Widget _buildTypingIndicator() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -711,41 +656,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
-          // FIX 3 — Voice button works on tap
-          GestureDetector(
-            onTap: () => _sendVoiceMessage(),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _isListening
-                    ? const Color(0xFFFF8C6B)
-                    : Colors.white.withOpacity(0.07),
-                border: Border.all(
-                  color: _isListening
-                      ? const Color(0xFFFF8C6B)
-                      : Colors.white.withOpacity(0.1),
-                ),
-                boxShadow: _isListening
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFFFF8C6B).withOpacity(0.5),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Icon(
-                _isListening ? Icons.mic : Icons.mic_none,
-                color: _isListening ? Colors.white : const Color(0xFFFF8C6B),
-                size: 22,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
+          // ============================================================
+          // VOICE BUTTON REMOVED — no mic
+          // ============================================================
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -801,7 +714,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _gradientAnimationController.dispose();
     _waveAnimationController.dispose();
     _particleController.dispose();
-    _audioPlayer.dispose();
     _controller.dispose();
     _scrollController.dispose();
     _rewardedAd?.dispose();
