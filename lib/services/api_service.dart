@@ -377,4 +377,35 @@ class ApiService {
       throw Exception('Failed to activate premium');
     }
   }
+
+  // ============================================================
+  // FCM TOKEN
+  // ============================================================
+
+  Future<void> saveFcmToken(String token) async {
+    try {
+      final response = await _authRequest(
+        method: 'POST',
+        endpoint: '/fcm-token',
+        body: {'fcm_token': token},
+      );
+
+      if (response.statusCode != 200) {
+        print('Failed to save FCM token');
+      }
+    } catch (e) {
+      print('Error saving FCM token: $e');
+    }
+  }
+
+  // ============================================================
+  // ADS
+  // ============================================================
+
+  Future<void> watchAdBonus() async {
+    // TODO: Implement actual ad watching
+    // For now, just return success
+    await Future.delayed(const Duration(seconds: 1));
+    return;
+  }
 }
