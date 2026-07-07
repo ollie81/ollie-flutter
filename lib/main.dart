@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -52,6 +53,7 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   final ApiService _api = ApiService();
   bool _isLoading = true;
+  String? _phoneNumber;
 
   @override
   void initState() {
@@ -60,21 +62,27 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkAuth() async {
-    final isLoggedIn = await _api.isLoggedIn();
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+    _phoneNumber = prefs.getString('phoneNumber');
+    
+    if (isLoggedIn && _phoneNumber != null) {
+      // Save FCM token
+      final fcmToken = await NotificationService.getFCMToken();
+      if (fcmToken != null) {
+        await _api.saveFcmToken(fcmToken);
+      }
+    }
+    
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
-      if (isLoggedIn) {
-        // Save FCM token on login
-        final fcmToken = await NotificationService.getFCMToken();
-        if (fcmToken != null) {
-          await _api.saveFcmToken(fcmToken);
-        }
-        
+      
+      if (isLoggedIn && _phoneNumber != null) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phoneNumber)),
+          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: _phoneNumber!)),
         );
       }
     }
