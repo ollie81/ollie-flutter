@@ -194,6 +194,7 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
+      await _storage.write(key: 'phoneNumber', value: phoneNumber);  // ← ADDED
       return data;
     } else {
       final error = jsonDecode(response.body);
@@ -220,6 +221,7 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
+      await _storage.write(key: 'phoneNumber', value: phoneNumber);  // ← ADDED
       return data;
     } else {
       final error = jsonDecode(response.body);
@@ -237,6 +239,7 @@ class ApiService {
       );
     }
     await clearTokens();
+    await _storage.delete(key: 'phoneNumber');  // ← ADDED
   }
 
   Future<Map<String, dynamic>> forgotPassword({
@@ -296,6 +299,13 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
+      // Get email from idToken and save as phoneNumber
+      final payload = idToken.split('.')[1];
+      final decoded = jsonDecode(String.fromCharCodes(base64.decode(base64.normalize(payload))));
+      final email = decoded['email'];
+      if (email != null) {
+        await _storage.write(key: 'phoneNumber', value: email);  // ← ADDED
+      }
       return data;
     } else {
       final error = jsonDecode(response.body);
@@ -339,6 +349,14 @@ class ApiService {
   Future<bool> isLoggedIn() async {
     final token = await getAccessToken();
     return token != null;
+  }
+
+  // ============================================================
+  // PHONE NUMBER
+  // ============================================================
+
+  Future<String?> getPhoneNumber() async {  // ← ADDED
+    return await _storage.read(key: 'phoneNumber');
   }
 
   // ============================================================
