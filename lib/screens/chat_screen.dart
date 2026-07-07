@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../services/api_service.dart';
 import 'dart:math';
 
@@ -29,6 +30,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isListening = false;
   String _emotionalHeader = "hey there 😊";
 
+  // ============================================================
+  // AD-REWARD STATE
+  // ============================================================
+  // TEST unit ID below — this is Google's official test rewarded
+  // ad unit, safe to ship during development. Swap it for your
+  // real AdMob rewarded ad unit ID before public release, or you
+  // won't earn real revenue and Google may flag test traffic.
+  static const String _rewardedAdUnitId =
+      'ca-app-pub-3940256099942544/5224354917';
+
+  RewardedAd? _rewardedAd;
+
   late AnimationController _orbAnimationController;
   late AnimationController _gradientAnimationController;
   late AnimationController _waveAnimationController;
@@ -44,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     super.initState();
     _initAnimations();
     _generateParticles();
+    _loadRewardedAd();
   }
 
   void _initAnimations() {
@@ -108,6 +122,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  // ============================================================
+  // SEND MESSAGE
+  // ============================================================
+
   Future<void> _sendMessage() async {
     if (_controller.text.trim().isEmpty) return;
 
@@ -121,10 +139,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
     _scrollToBottom();
 
+    await _requestOllieReply(userMessage);
+  }
+
+  /// Actually calls the backend for a reply. Split out from
+  /// _sendMessage so it can be retried after watching a
+  /// rewarded ad, without re-adding the user's message twice.
+  Future<void> _requestOllieReply(String userMessage) async {
     try {
-      final response = await _api.sendMessage(
-  message: userMessage,
-);
+      final response = await _api.sendMessage(message: userMessage);
 
       setState(() => _isTyping = false);
       _updateEmotionalHeader(response['reply']);
@@ -135,8 +158,143 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _scrollToBottom();
     } catch (e) {
       setState(() => _isTyping = false);
-      _showError(e.toString());
+
+      if (e.toString().contains('Daily limit reached')) {
+        _showLimitReachedSheet(userMessage);
+      } else {
+        _showError(e.toString());
+      }
     }
+  }
+
+  // ============================================================
+  // AD-REWARD FLOW
+  // ============================================================
+
+  void _loadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: _rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          _rewardedAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _rewardedAd = null;
+        },
+      ),
+    );
+  }
+
+  void _showLimitReachedSheet(String pendingMessage) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "you're out of free messages for today",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "watch a quick ad for 10 more minutes with ollie",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C6B),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _watchAdForBonus(pendingMessage);
+                  },
+                  child: const Text(
+                    'watch ad for 10 more minutes',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // TODO: navigate to your premium/subscription screen
+                },
+                child: Text(
+                  'or subscribe for unlimited messages',
+                  style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _watchAdForBonus(String pendingMessage) {
+    if (_rewardedAd == null) {
+      _showError("ad not ready yet — try again in a moment");
+      _loadRewardedAd();
+      return;
+    }
+
+    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _loadRewardedAd(); // preload the next one
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _loadRewardedAd();
+        _showError("couldn't show ad, try again");
+      },
+    );
+
+    _rewardedAd!.show(
+      onUserEarnedReward: (ad, reward) async {
+        try {
+          await _api.watchAdBonus();
+          setState(() => _isTyping = true);
+          await _requestOllieReply(pendingMessage);
+        } catch (e) {
+          _showError("couldn't unlock bonus messages, try again");
+        }
+      },
+    );
   }
 
   // FIX 3 — Voice button now works
@@ -149,9 +307,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() => _isTyping = true);
 
     try {
-    final response = await _api.sendMessage(
-  message: "hey",
-);
+      final response = await _api.sendMessage(message: "hey");
       setState(() {
         _isTyping = false;
         _messages.add(ChatMessage(
@@ -169,9 +325,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _speakMessage(String message) async {
     try {
-      final audioFile = await _api.sendVoiceMessage(
-  message: message,
-);
+      final audioFile = await _api.sendVoiceMessage(message: message);
       if (audioFile != null) {
         await _audioPlayer.play(DeviceFileSource(audioFile.path));
       }
@@ -650,6 +804,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _audioPlayer.dispose();
     _controller.dispose();
     _scrollController.dispose();
+    _rewardedAd?.dispose();
     super.dispose();
   }
 }
