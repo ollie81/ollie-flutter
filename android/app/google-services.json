@@ -1,4 +1,5 @@
-{
+
+   {
   "project_info": {
     "project_number": "912949427755",
     "project_id": "ollie-bd4ca",
@@ -9,7 +10,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:912949427755:android:656f59f2b0ff2ba8db746e",
         "android_client_info": {
-          "package_name": "com.ollie_app"
+          "package_name": "com.example.ollie_app"
         }
       },
       "oauth_client": [],
@@ -26,4 +27,4 @@
     }
   ],
   "configuration_version": "1"
-}
+}   
