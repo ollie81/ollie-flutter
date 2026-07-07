@@ -1,10 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/api_service.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  await Firebase.initializeApp();
+  
+  // Initialize notifications
+  await NotificationService.init();
+  await NotificationService.setupFirebase();
+  
+  // Initialize Google Ads
+  await MobileAds.instance.initialize();
+  
   runApp(const OllieApp());
 }
 
@@ -50,6 +66,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
         _isLoading = false;
       });
       if (isLoggedIn) {
+        // Save FCM token on login
+        final fcmToken = await NotificationService.getFCMToken();
+        if (fcmToken != null) {
+          await _api.saveFcmToken(fcmToken);
+        }
+        
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
