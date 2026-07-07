@@ -74,7 +74,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phoneNumber)),
         );
       }
     }
