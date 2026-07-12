@@ -1,14 +1,13 @@
-
-   {
+{
   "project_info": {
-    "project_number": "912949427755",
-    "project_id": "ollie-bd4ca",
-    "storage_bucket": "ollie-bd4ca.firebasestorage.app"
+    "project_number": "431417738635",
+    "project_id": "oliie-46eef",
+    "storage_bucket": "oliie-46eef.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:912949427755:android:656f59f2b0ff2ba8db746e",
+        "mobilesdk_app_id": "1:431417738635:android:a24c66b2ef5b33cffc5b8e",
         "android_client_info": {
           "package_name": "com.example.ollie_app"
         }
@@ -16,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB03OD0QwxpGIw-jkY3TW_No3FXsKFqOAg"
+          "current_key": "AIzaSyDuv0WH-5iAIStBZiH3sK8vBaJLxOVXjiY"
         }
       ],
       "services": {
@@ -27,4 +26,5 @@
     }
   ],
   "configuration_version": "1"
-}   
+}
+  
