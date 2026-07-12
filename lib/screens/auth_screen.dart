@@ -102,6 +102,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _saveAndNavigate(String phone) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phoneNumber', phone);
+    await prefs.setBool('is_logged_in', true);
     if (mounted) {
       Navigator.pushReplacement(
         context,
