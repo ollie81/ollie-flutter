@@ -49,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('phoneNumber', phone);
+      await prefs.setBool('is_logged_in', true);
 
       if (mounted) {
         Navigator.pushReplacement(
