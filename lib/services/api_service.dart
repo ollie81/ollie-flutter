@@ -420,10 +420,16 @@ class ApiService {
   // ADS
   // ============================================================
 
-  Future<void> watchAdBonus() async {
-    // TODO: Implement actual ad watching
-    // For now, just return success
-    await Future.delayed(const Duration(seconds: 1));
-    return;
+  Future<Map<String, dynamic>> watchAdBonus() async {
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/premium/watch-ad',
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to unlock bonus messages');
+    }
   }
 }
