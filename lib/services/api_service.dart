@@ -366,7 +366,7 @@ class ApiService {
   Future<Map<String, dynamic>> checkPremiumStatus() async {
     final response = await _authRequest(
       method: 'GET',
-      endpoint: '/premium/status/me',
+      endpoint: '/premium/status',
     );
 
     if (response.statusCode == 200) {
