@@ -25,6 +25,12 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _obscureConfirm = true;
   bool _otpSent = false;
 
+  // Separate OTP-sent flag for signup, so it doesn't interfere
+  // with the existing forgot-password OTP flow which reuses
+  // _otpSent/_otpController for its own step.
+  bool _signupOtpSent = false;
+  final TextEditingController _signupOtpController = TextEditingController();
+
   Future<void> _handleSubmit() async {
     final phone = _phoneController.text.trim();
 
@@ -57,11 +63,25 @@ class _AuthScreenState extends State<AuthScreen> {
           _showError('Passwords do not match');
           return;
         }
-        await _api.signup(
-          phoneNumber: phone,
-          password: _passwordController.text,
-        );
-        await _saveAndNavigate(phone);
+
+        if (!_signupOtpSent) {
+          // Step 1: send OTP, don't create the account yet.
+          await _api.requestSignupOtp(phoneNumber: phone);
+          setState(() => _signupOtpSent = true);
+          _showSuccess('OTP sent to your phone');
+        } else {
+          // Step 2: verify OTP + create the account.
+          if (_signupOtpController.text.trim().isEmpty) {
+            _showError('Enter the OTP sent to your phone');
+            return;
+          }
+          await _api.signup(
+            phoneNumber: phone,
+            password: _passwordController.text,
+            otp: _signupOtpController.text.trim(),
+          );
+          await _saveAndNavigate(phone);
+        }
       }
 
       else if (_mode == AuthMode.forgot) {
@@ -279,6 +299,18 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 14),
                   ],
 
+                  // Signup OTP field — only appears after the OTP
+                  // has been sent in step 1
+                  if (_mode == AuthMode.signup && _signupOtpSent) ...[
+                    _buildTextField(
+                      controller: _signupOtpController,
+                      hint: 'Enter the code sent to your phone',
+                      icon: Icons.pin,
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
                   // OTP Field
                   if (_mode == AuthMode.forgot && _otpSent) ...[
                     _buildTextField(
@@ -329,7 +361,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               _mode == AuthMode.login
                                   ? 'Sign In'
                                   : (_mode == AuthMode.signup
-                                      ? 'Create Account'
+                                      ? (_signupOtpSent ? 'Verify & Create Account' : 'Send OTP')
                                       : (_otpSent ? 'Reset Password' : 'Send OTP')),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
@@ -430,6 +462,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                   : AuthMode.login;
                               _passwordController.clear();
                               _confirmController.clear();
+                              _signupOtpSent = false;
+                              _signupOtpController.clear();
                             });
                           },
                           child: Text(
