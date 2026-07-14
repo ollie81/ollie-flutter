@@ -175,9 +175,27 @@ class ApiService {
   // AUTHENTICATION
   // ============================================================
 
+  Future<Map<String, dynamic>> requestSignupOtp({
+    required String phoneNumber,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/signup/request-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone_number': phoneNumber}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail']);
+    }
+  }
+
   Future<Map<String, dynamic>> signup({
     required String phoneNumber,
     required String password,
+    required String otp,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/signup'),
@@ -185,6 +203,7 @@ class ApiService {
       body: jsonEncode({
         'phone_number': phoneNumber,
         'password': password,
+        'otp': otp,
       }),
     );
 
