@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
 
@@ -11,30 +12,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
   final ApiService _api = ApiService();
+
+  // Full E.164 number (e.g. +250788123456) — set once the user
+  // picks a country and enters a valid number for that country.
+  String? _fullPhoneNumber;
+  bool _phoneValid = false;
 
   bool _isLoading = false;
   bool _isNewUser = false;
   bool _obscurePassword = true;
 
-  // Auto-login disabled — forces real login every time
+  // Signup requires OTP verification before the account is
+  // created — mirrors the flow in auth_screen.dart.
+  bool _signupOtpSent = false;
+
   @override
   void initState() {
     super.initState();
   }
 
   Future<void> _submit() async {
-    final phone = _phoneController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (phone.length < 10) {
-      _showError('Enter a valid phone number');
-      return;
-    }
-    if (password.length < 6) {
-      _showError('Password must be at least 6 characters');
+    if (!_phoneValid || _fullPhoneNumber == null) {
+      _showError('Enter a valid phone number for your country');
       return;
     }
 
@@ -42,19 +46,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       if (_isNewUser) {
-        await _api.signup(phoneNumber: phone, password: password);
+        if (password.length < 6) {
+          _showError('Password must be at least 6 characters');
+          return;
+        }
+
+        if (!_signupOtpSent) {
+          // Step 1: send OTP, account not created yet.
+          await _api.requestSignupOtp(phoneNumber: _fullPhoneNumber!);
+          setState(() => _signupOtpSent = true);
+          _showSuccess('OTP sent to your phone');
+          return;
+        } else {
+          // Step 2: verify OTP + create the account.
+          if (_otpController.text.trim().isEmpty) {
+            _showError('Enter the OTP sent to your phone');
+            return;
+          }
+          await _api.signup(
+            phoneNumber: _fullPhoneNumber!,
+            password: password,
+            otp: _otpController.text.trim(),
+          );
+        }
       } else {
-        await _api.login(phoneNumber: phone, password: password);
+        if (password.length < 6) {
+          _showError('Password must be at least 6 characters');
+          return;
+        }
+        await _api.login(phoneNumber: _fullPhoneNumber!, password: password);
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('phoneNumber', phone);
+      await prefs.setString('phoneNumber', _fullPhoneNumber!);
       await prefs.setBool('is_logged_in', true);
 
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phone)),
+          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: _fullPhoneNumber!)),
         );
       }
     } catch (e) {
@@ -75,6 +105,24 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
         backgroundColor: const Color(0xFFE53935),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+          ],
+        ),
+        backgroundColor: const Color(0xFF43A047),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -153,18 +201,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 48),
 
-                  // Phone field
-                  _buildField(
-                    controller: _phoneController,
-                    hint: 'Phone number',
-                    icon: Icons.phone_android_rounded,
-                    keyboardType: TextInputType.phone,
-                  ),
+                  // Phone field with country code picker
+                  _buildPhoneField(),
                   const SizedBox(height: 14),
 
                   // Password field
                   _buildPasswordField(),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 14),
+
+                  // OTP field — only for signup, after OTP is sent
+                  if (_isNewUser && _signupOtpSent) ...[
+                    _buildOtpField(),
+                    const SizedBox(height: 14),
+                  ],
+
+                  const SizedBox(height: 14),
 
                   // Submit button
                   GestureDetector(
@@ -204,7 +255,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             )
                           : Text(
-                              _isNewUser ? 'Create Account' : 'Login',
+                              _isNewUser
+                                  ? (_signupOtpSent ? 'Verify & Create Account' : 'Send OTP')
+                                  : 'Login',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.white,
@@ -220,9 +273,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   // Toggle login/signup
                   GestureDetector(
                     onTap: () {
-                      setState(() => _isNewUser = !_isNewUser);
-                      _phoneController.clear();
-                      _passwordController.clear();
+                      setState(() {
+                        _isNewUser = !_isNewUser;
+                        _passwordController.clear();
+                        _otpController.clear();
+                        _signupOtpSent = false;
+                      });
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -252,29 +308,31 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
+  Widget _buildPhoneField() {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Colors.white.withOpacity(0.07),
         border: Border.all(color: Colors.white.withOpacity(0.1)),
       ),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
+      child: IntlPhoneField(
+        initialCountryCode: 'RW',
         style: const TextStyle(color: Colors.white, fontSize: 15),
+        dropdownTextStyle: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: 'Phone number',
           hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-          prefixIcon: Icon(icon, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         ),
+        dropdownIconPosition: IconPosition.trailing,
+        flagsButtonPadding: const EdgeInsets.only(left: 12),
+        onChanged: (phone) {
+          setState(() {
+            _fullPhoneNumber = phone.completeNumber;
+            _phoneValid = phone.isValidNumber();
+          });
+        },
       ),
     );
   }
@@ -303,6 +361,29 @@ class _LoginScreenState extends State<LoginScreen> {
               size: 20,
             ),
           ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOtpField() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withOpacity(0.07),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: TextField(
+        controller: _otpController,
+        keyboardType: TextInputType.number,
+        style: const TextStyle(color: Colors.white, fontSize: 15),
+        decoration: InputDecoration(
+          hintText: 'Enter the code sent to your phone',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+          prefixIcon: Icon(Icons.pin,
+              color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         ),
