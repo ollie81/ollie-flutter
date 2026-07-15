@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -188,7 +189,7 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       final error = jsonDecode(response.body);
-      throw Exception(error['detail']);
+      throw Exception(error['detail'] ?? 'Failed to send OTP');
     }
   }
 
@@ -213,11 +214,11 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
-      await _storage.write(key: 'phoneNumber', value: phoneNumber);  // ← ADDED
+      await _storage.write(key: 'phoneNumber', value: phoneNumber);
       return data;
     } else {
       final error = jsonDecode(response.body);
-      throw Exception(error['detail']);
+      throw Exception(error['detail'] ?? 'Signup failed');
     }
   }
 
@@ -240,25 +241,29 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
-      await _storage.write(key: 'phoneNumber', value: phoneNumber);  // ← ADDED
+      await _storage.write(key: 'phoneNumber', value: phoneNumber);
       return data;
     } else {
       final error = jsonDecode(response.body);
-      throw Exception(error['detail']);
+      throw Exception(error['detail'] ?? 'Login failed');
     }
   }
 
   Future<void> logout() async {
     final refreshToken = await getRefreshToken();
     if (refreshToken != null) {
-      await http.post(
-        Uri.parse('$baseUrl/auth/logout'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': refreshToken}),
-      );
+      try {
+        await http.post(
+          Uri.parse('$baseUrl/auth/logout'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh_token': refreshToken}),
+        );
+      } catch (e) {
+        // Ignore logout errors
+      }
     }
     await clearTokens();
-    await _storage.delete(key: 'phoneNumber');  // ← ADDED
+    await _storage.delete(key: 'phoneNumber');
   }
 
   Future<Map<String, dynamic>> forgotPassword({
@@ -274,7 +279,7 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       final error = jsonDecode(response.body);
-      throw Exception(error['detail']);
+      throw Exception(error['detail'] ?? 'Failed to send OTP');
     }
   }
 
@@ -297,7 +302,7 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       final error = jsonDecode(response.body);
-      throw Exception(error['detail']);
+      throw Exception(error['detail'] ?? 'Password reset failed');
     }
   }
 
@@ -318,17 +323,35 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
-      // Get email from idToken and save as phoneNumber
-      final payload = idToken.split('.')[1];
-      final decoded = jsonDecode(String.fromCharCodes(base64.decode(base64.normalize(payload))));
-      final email = decoded['email'];
-      if (email != null) {
-        await _storage.write(key: 'phoneNumber', value: email);  // ← ADDED
+      
+      // Extract email from ID token
+      try {
+        final payload = idToken.split('.')[1];
+        // Add padding if needed
+        String normalized = payload;
+        while (normalized.length % 4 != 0) {
+          normalized += '=';
+        }
+        final decoded = jsonDecode(
+          String.fromCharCodes(base64.decode(normalized))
+        );
+        final email = decoded['email'];
+        if (email != null) {
+          await _storage.write(key: 'phoneNumber', value: email);
+        }
+      } catch (e) {
+        // If we can't extract email, use a placeholder
+        await _storage.write(key: 'phoneNumber', value: 'google_user');
       }
+      
       return data;
     } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['detail']);
+      try {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Google login failed');
+      } catch (e) {
+        throw Exception('Google login failed: ${response.statusCode}');
+      }
     }
   }
 
@@ -354,15 +377,19 @@ class ApiService {
   }
 
   Future<bool> checkUserExists(String phoneNumber) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/check/$phoneNumber'),
-    );
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/check/$phoneNumber'),
+      );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['exists'];
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['exists'] ?? false;
+      }
+      return false;
+    } catch (e) {
+      return false;
     }
-    return false;
   }
 
   Future<bool> isLoggedIn() async {
@@ -374,7 +401,7 @@ class ApiService {
   // PHONE NUMBER
   // ============================================================
 
-  Future<String?> getPhoneNumber() async {  // ← ADDED
+  Future<String?> getPhoneNumber() async {
     return await _storage.read(key: 'phoneNumber');
   }
 
@@ -423,12 +450,12 @@ class ApiService {
     try {
       final response = await _authRequest(
         method: 'POST',
-        endpoint: '/fcm-token',
+        endpoint: '/auth/fcm-token',  // Fixed: added /auth/ prefix
         body: {'fcm_token': token},
       );
 
       if (response.statusCode != 200) {
-        print('Failed to save FCM token');
+        print('Failed to save FCM token: ${response.statusCode}');
       }
     } catch (e) {
       print('Error saving FCM token: $e');
@@ -449,6 +476,48 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to unlock bonus messages');
+    }
+  }
+
+  // ============================================================
+  // GET USER PROFILE
+  // ============================================================
+
+  Future<Map<String, dynamic>> getUserProfile() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/auth/me',
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to get user profile');
+    }
+  }
+
+  // ============================================================
+  // UPDATE USER PROFILE
+  // ============================================================
+
+  Future<Map<String, dynamic>> updateUserProfile({
+    String? username,
+    String? country,
+  }) async {
+    final Map<String, dynamic> body = {};
+    if (username != null) body['username'] = username;
+    if (country != null) body['country'] = country;
+
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/auth/update',
+      body: body,
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to update profile');
     }
   }
 }
