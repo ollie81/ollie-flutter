@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'chat_screen.dart';
-import 'login_screen.dart';
+import 'auth_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String phoneNumber;
