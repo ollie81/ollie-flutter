@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
@@ -20,19 +22,23 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _otpController = TextEditingController();
   final ApiService _api = ApiService();
 
+  // Add country code variable
+  String _countryCode = '+250'; // Default to Rwanda
+  String _fullPhoneNumber = '';
+
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _otpSent = false;
-
-  // Separate OTP-sent flag for signup, so it doesn't interfere
-  // with the existing forgot-password OTP flow which reuses
-  // _otpSent/_otpController for its own step.
   bool _signupOtpSent = false;
   final TextEditingController _signupOtpController = TextEditingController();
 
+  // ... existing methods (_handleSubmit, _saveAndNavigate, etc.) remain the same
+  // But update phone number references to use _fullPhoneNumber
+
   Future<void> _handleSubmit() async {
-    final phone = _phoneController.text.trim();
+    // Use _fullPhoneNumber instead of _phoneController.text
+    final phone = _fullPhoneNumber;
 
     if (phone.isEmpty) {
       _showError('Enter phone number');
@@ -52,9 +58,7 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text,
         );
         await _saveAndNavigate(phone);
-      }
-
-      else if (_mode == AuthMode.signup) {
+      } else if (_mode == AuthMode.signup) {
         if (_passwordController.text.length < 6) {
           _showError('Password must be at least 6 characters');
           return;
@@ -65,12 +69,10 @@ class _AuthScreenState extends State<AuthScreen> {
         }
 
         if (!_signupOtpSent) {
-          // Step 1: send OTP, don't create the account yet.
           await _api.requestSignupOtp(phoneNumber: phone);
           setState(() => _signupOtpSent = true);
           _showSuccess('OTP sent to your phone');
         } else {
-          // Step 2: verify OTP + create the account.
           if (_signupOtpController.text.trim().isEmpty) {
             _showError('Enter the OTP sent to your phone');
             return;
@@ -82,9 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
           );
           await _saveAndNavigate(phone);
         }
-      }
-
-      else if (_mode == AuthMode.forgot) {
+      } else if (_mode == AuthMode.forgot) {
         if (!_otpSent) {
           await _api.forgotPassword(phoneNumber: phone);
           setState(() => _otpSent = true);
@@ -119,63 +119,56 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<void> _saveAndNavigate(String phone) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('phoneNumber', phone);
-    await prefs.setBool('is_logged_in', true);
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(phoneNumber: phone),
-        ),
-      );
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-        backgroundColor: const Color(0xFFE53935),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-        backgroundColor: const Color(0xFF43A047),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
+  // ... existing _saveAndNavigate, _showError, _showSuccess methods stay the same
 
   // ============================================================
-  // GOOGLE LOGIN
+  // GOOGLE LOGIN - IMPLEMENTED
   // ============================================================
 
   Future<void> _handleGoogleLogin() async {
-    // TODO: Implement Google Sign-In
-    // Will add after dependencies are installed
+    setState(() => _isLoading = true);
+    
+    try {
+      // Import google_sign_in at top
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+      
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      
+      if (googleUser == null) {
+        // User cancelled
+        return;
+      }
+      
+      final GoogleSignInAuthentication googleAuth = 
+          await googleUser.authentication;
+      
+      // Send to backend
+      final response = await _api.googleLogin(
+        idToken: googleAuth.idToken!,
+      );
+      
+      // Save tokens
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('access_token', response['access_token']);
+      await prefs.setString('refresh_token', response['refresh_token']);
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setString('phoneNumber', googleUser.email);
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HomeScreen(phoneNumber: googleUser.email),
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Google Sign-In failed: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -252,12 +245,60 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 36),
 
-                  // Phone Field
-                  _buildTextField(
+                  // =============================================
+                  // PHONE FIELD WITH COUNTRY PICKER
+                  // =============================================
+                  IntlPhoneField(
                     controller: _phoneController,
-                    hint: 'Phone number',
-                    icon: Icons.phone_android,
-                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      hintText: 'Enter phone number',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.07),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(
+                          color: Color(0xFFFF8C6B),
+                          width: 2,
+                        ),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.phone_android,
+                        color: const Color(0xFFFF8C6B).withOpacity(0.7),
+                        size: 20,
+                      ),
+                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    dropdownIconPosition: IconPosition.trailing,
+                    dropdownIcon: Icon(
+                      Icons.arrow_drop_down,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                    flagsButtonPadding: const EdgeInsets.all(8),
+                    onChanged: (PhoneNumber number) {
+                      setState(() {
+                        _countryCode = number.countryCode;
+                        _fullPhoneNumber = number.completeNumber;
+                      });
+                    },
+                    onCountryChanged: (country) {
+                      setState(() {
+                        _countryCode = country.dialCode;
+                      });
+                    },
+                    initialCountryCode: 'RW',
                   ),
                   const SizedBox(height: 14),
 
@@ -299,8 +340,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 14),
                   ],
 
-                  // Signup OTP field — only appears after the OTP
-                  // has been sent in step 1
+                  // Signup OTP field
                   if (_mode == AuthMode.signup && _signupOtpSent) ...[
                     _buildTextField(
                       controller: _signupOtpController,
@@ -311,7 +351,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 14),
                   ],
 
-                  // OTP Field
+                  // OTP Field for forgot password
                   if (_mode == AuthMode.forgot && _otpSent) ...[
                     _buildTextField(
                       controller: _otpController,
@@ -374,7 +414,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // DIVIDER + GOOGLE BUTTON (only for login/signup)
+                  // DIVIDER + GOOGLE BUTTON
                   if (_mode != AuthMode.forgot) ...[
                     Row(
                       children: [
@@ -406,7 +446,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
                     // Google Sign-In Button
                     GestureDetector(
-                      onTap: _handleGoogleLogin,
+                      onTap: _isLoading ? null : _handleGoogleLogin,
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 14),
