@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';  // ✅ ADD THIS
 import '../services/api_service.dart';
 import 'home_screen.dart';
 
@@ -22,8 +23,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _otpController = TextEditingController();
   final ApiService _api = ApiService();
 
-  // Add country code variable
-  String _countryCode = '+250'; // Default to Rwanda
+  String _countryCode = '+250';
   String _fullPhoneNumber = '';
 
   bool _isLoading = false;
@@ -33,11 +33,11 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _signupOtpSent = false;
   final TextEditingController _signupOtpController = TextEditingController();
 
-  // ... existing methods (_handleSubmit, _saveAndNavigate, etc.) remain the same
-  // But update phone number references to use _fullPhoneNumber
+  // ============================================================
+  // SUBMIT HANDLER
+  // ============================================================
 
   Future<void> _handleSubmit() async {
-    // Use _fullPhoneNumber instead of _phoneController.text
     final phone = _fullPhoneNumber;
 
     if (phone.isEmpty) {
@@ -119,43 +119,95 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  // ... existing _saveAndNavigate, _showError, _showSuccess methods stay the same
+  // ============================================================
+  // NAVIGATION HELPERS
+  // ============================================================
+
+  Future<void> _saveAndNavigate(String phone) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('phoneNumber', phone);
+    await prefs.setBool('is_logged_in', true);
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(phoneNumber: phone),
+        ),
+      );
+    }
+  }
 
   // ============================================================
-  // GOOGLE LOGIN - IMPLEMENTED
+  // SNACKBAR HELPERS
+  // ============================================================
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+          ],
+        ),
+        backgroundColor: const Color(0xFFE53935),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+          ],
+        ),
+        backgroundColor: const Color(0xFF43A047),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // ============================================================
+  // GOOGLE LOGIN
   // ============================================================
 
   Future<void> _handleGoogleLogin() async {
     setState(() => _isLoading = true);
-    
+
     try {
-      // Import google_sign_in at top
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
       );
-      
+
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      
+
       if (googleUser == null) {
-        // User cancelled
         return;
       }
-      
-      final GoogleSignInAuthentication googleAuth = 
+
+      final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
-      
-      // Send to backend
+
       final response = await _api.googleLogin(
         idToken: googleAuth.idToken!,
       );
-      
-      // Save tokens
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('access_token', response['access_token']);
       await prefs.setString('refresh_token', response['refresh_token']);
       await prefs.setBool('is_logged_in', true);
       await prefs.setString('phoneNumber', googleUser.email);
-      
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -170,6 +222,10 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -245,9 +301,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 36),
 
-                  // =============================================
-                  // PHONE FIELD WITH COUNTRY PICKER
-                  // =============================================
+                  // Phone Field with Country Picker
                   IntlPhoneField(
                     controller: _phoneController,
                     decoration: InputDecoration(
