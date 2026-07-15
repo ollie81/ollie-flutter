@@ -89,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          MaterialPageRoute(builder: (_) => const AuthScreen()),
         );
       }
     }
