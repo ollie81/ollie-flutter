@@ -7,20 +7,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
-          
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.6'
-          
-      - run: flutter pub get
 
+      # Decode the persistent release keystore from a GitHub secret.
+      # This keeps the SHA-1 fingerprint constant across every build
+      # instead of a new one being generated per runner — that's
+      # what was breaking Google Sign-In (error 10 / DEVELOPER_ERROR).
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.OLLIE_KEYSTORE_BASE64 }}" | base64 -d > android/app/ollie-release.keystore
+
+      # Generates android/key.properties, which build.gradle.kts
+      # already reads to sign release builds with the keystore above.
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.OLLIE_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.OLLIE_KEY_PASSWORD }}
+          keyAlias=ollie
+          storeFile=app/ollie-release.keystore
+          EOF
+
+      - run: flutter pub get
       - run: flutter build apk --release --split-per-abi
-      
+
       - uses: actions/upload-artifact@v4
         with:
           name: ollie-apk
