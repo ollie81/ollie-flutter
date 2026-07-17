@@ -12,7 +12,12 @@
           "package_name": "com.example.ollie_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "431417738635-v9s8b97ide07g9mo1fqmv6as9r8c0ur5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDuv0WH-5iAIStBZiH3sK8vBaJLxOVXjiY"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "431417738635-v9s8b97ide07g9mo1fqmv6as9r8c0ur5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
