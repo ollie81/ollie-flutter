@@ -521,3 +521,73 @@ class ApiService {
     }
   }
 }
+// ============================================================
+// USAGE
+// ============================================================
+
+Future<Map<String, dynamic>> getUsage() async {
+  final response = await _authRequest(
+    method: 'GET',
+    endpoint: '/user/usage',
+  );
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  } else {
+    return {
+      'daily_messages': 0,
+      'daily_voice_minutes': 0,
+      'daily_limit': 20,
+      'voice_limit_minutes': 1,
+    };
+  }
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+Future<void> setNotificationsEnabled(bool enabled) async {
+  try {
+    await _authRequest(
+      method: 'POST',
+      endpoint: '/user/notifications',
+      body: {'enabled': enabled},
+    );
+  } catch (e) {
+    // Ignore
+  }
+}
+
+// ============================================================
+// MEMORY
+// ============================================================
+
+Future<void> clearMemory() async {
+  try {
+    await _authRequest(
+      method: 'POST',
+      endpoint: '/user/clear-memory',
+    );
+  } catch (e) {
+    // Ignore
+  }
+}
+
+// ============================================================
+// DELETE ACCOUNT
+// ============================================================
+
+Future<void> deleteAccount() async {
+  final response = await _authRequest(
+    method: 'DELETE',
+    endpoint: '/user/delete',
+  );
+
+  if (response.statusCode == 200) {
+    await clearTokens();
+    await _storage.delete(key: 'phoneNumber');
+  } else {
+    throw Exception('Failed to delete account');
+  }
+}  
