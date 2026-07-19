@@ -35,7 +35,11 @@ jobs:
           keyAlias=ollie
           storeFile=app/ollie-release.keystore
           EOF
-
+          - name: Print SHA-1 fingerprint
+        run: |
+          keytool -list -v -keystore android/app/ollie-release.keystore \
+            -alias ollie -storepass "${{ secrets.OLLIE_KEYSTORE_PASSWORD }}"
+         
       - run: flutter pub get
       - run: flutter build apk --release --split-per-abi
 
