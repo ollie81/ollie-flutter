@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_sign_in/google_sign_in.dart';  // ✅ ADD THIS
+import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
 
@@ -32,6 +32,14 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _otpSent = false;
   bool _signupOtpSent = false;
   final TextEditingController _signupOtpController = TextEditingController();
+
+  // Must match the Web client ID your backend (auth.py) verifies
+  // Google ID tokens against. Without this, Android issues a token
+  // scoped to the Android OAuth client instead, and the backend's
+  // id_token.verify_oauth2_token() rejects it with an audience
+  // mismatch — Google Sign-In fails even with a correct SHA-1.
+  static const String _googleServerClientId =
+      '762080204480-pi9vflsb9klhgcggkjcuid214uhaa45q.apps.googleusercontent.com';
 
   // ============================================================
   // SUBMIT HANDLER
@@ -187,6 +195,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
+        serverClientId: _googleServerClientId,
       );
 
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
@@ -198,13 +207,17 @@ class _AuthScreenState extends State<AuthScreen> {
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      final response = await _api.googleLogin(
-        idToken: googleAuth.idToken!,
-      );
+      final idToken = googleAuth.idToken;
+      if (idToken == null) {
+        _showError('Google Sign-In failed: no ID token returned');
+        return;
+      }
+
+      // googleLogin() already saves tokens to secure storage
+      // internally — no need to duplicate that here.
+      await _api.googleLogin(idToken: idToken);
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('access_token', response['access_token']);
-      await prefs.setString('refresh_token', response['refresh_token']);
       await prefs.setBool('is_logged_in', true);
       await prefs.setString('phoneNumber', googleUser.email);
 
