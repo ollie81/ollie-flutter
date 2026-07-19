@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -92,6 +91,11 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       );
+    } else if (method == 'DELETE') {
+      response = await http.delete(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: headers,
+      );
     } else {
       response = await http.get(
         Uri.parse('$baseUrl$endpoint'),
@@ -109,6 +113,11 @@ class ApiService {
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
+          );
+        } else if (method == 'DELETE') {
+          response = await http.delete(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: newHeaders,
           );
         } else {
           response = await http.get(
@@ -450,7 +459,7 @@ class ApiService {
     try {
       final response = await _authRequest(
         method: 'POST',
-        endpoint: '/auth/fcm-token',  // Fixed: added /auth/ prefix
+        endpoint: '/auth/fcm-token',
         body: {'fcm_token': token},
       );
 
@@ -520,74 +529,75 @@ class ApiService {
       throw Exception('Failed to update profile');
     }
   }
-}
-// ============================================================
-// USAGE
-// ============================================================
 
-Future<Map<String, dynamic>> getUsage() async {
-  final response = await _authRequest(
-    method: 'GET',
-    endpoint: '/user/usage',
-  );
+  // ============================================================
+  // USAGE
+  // ============================================================
 
-  if (response.statusCode == 200) {
-    return jsonDecode(response.body);
-  } else {
-    return {
-      'daily_messages': 0,
-      'daily_voice_minutes': 0,
-      'daily_limit': 20,
-      'voice_limit_minutes': 1,
-    };
-  }
-}
-
-// ============================================================
-// NOTIFICATIONS
-// ============================================================
-
-Future<void> setNotificationsEnabled(bool enabled) async {
-  try {
-    await _authRequest(
-      method: 'POST',
-      endpoint: '/user/notifications',
-      body: {'enabled': enabled},
+  Future<Map<String, dynamic>> getUsage() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/user/usage',
     );
-  } catch (e) {
-    // Ignore
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      return {
+        'daily_messages': 0,
+        'daily_voice_minutes': 0,
+        'daily_limit': 20,
+        'voice_limit_minutes': 1,
+      };
+    }
   }
-}
 
-// ============================================================
-// MEMORY
-// ============================================================
+  // ============================================================
+  // NOTIFICATIONS
+  // ============================================================
 
-Future<void> clearMemory() async {
-  try {
-    await _authRequest(
-      method: 'POST',
-      endpoint: '/user/clear-memory',
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    try {
+      await _authRequest(
+        method: 'POST',
+        endpoint: '/user/notifications',
+        body: {'enabled': enabled},
+      );
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // ============================================================
+  // MEMORY
+  // ============================================================
+
+  Future<void> clearMemory() async {
+    try {
+      await _authRequest(
+        method: 'POST',
+        endpoint: '/user/clear-memory',
+      );
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // ============================================================
+  // DELETE ACCOUNT
+  // ============================================================
+
+  Future<void> deleteAccount() async {
+    final response = await _authRequest(
+      method: 'DELETE',
+      endpoint: '/user/delete',
     );
-  } catch (e) {
-    // Ignore
+
+    if (response.statusCode == 200) {
+      await clearTokens();
+      await _storage.delete(key: 'phoneNumber');
+    } else {
+      throw Exception('Failed to delete account');
+    }
   }
 }
-
-// ============================================================
-// DELETE ACCOUNT
-// ============================================================
-
-Future<void> deleteAccount() async {
-  final response = await _authRequest(
-    method: 'DELETE',
-    endpoint: '/user/delete',
-  );
-
-  if (response.statusCode == 200) {
-    await clearTokens();
-    await _storage.delete(key: 'phoneNumber');
-  } else {
-    throw Exception('Failed to delete account');
-  }
-}  
