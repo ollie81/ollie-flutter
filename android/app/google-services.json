@@ -1,4 +1,4 @@
-  {
+{
   "project_info": {
     "project_number": "431417738635",
     "project_id": "oliie-46eef",
@@ -14,7 +14,15 @@
       },
       "oauth_client": [
         {
-          "client_id": "431417738635-v9s8b97ide07g9mo1fqmv6as9r8c0ur5.apps.googleusercontent.com",
+          "client_id": "431417738635-n0bea3hlnj9puq835geumrovate0sge2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ollie_app",
+            "certificate_hash": "f40f77e913832fd7124f1abe24488921f256278e"
+          }
+        },
+        {
+          "client_id": "431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -27,7 +35,7 @@
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "431417738635-v9s8b97ide07g9mo1fqmv6as9r8c0ur5.apps.googleusercontent.com",
+              "client_id": "431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com",
               "client_type": 3
             }
           ]
