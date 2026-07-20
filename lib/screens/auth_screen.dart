@@ -39,8 +39,7 @@ class _AuthScreenState extends State<AuthScreen> {
   // id_token.verify_oauth2_token() rejects it with an audience
   // mismatch — Google Sign-In fails even with a correct SHA-1.
   static const String _googleServerClientId =
-      '762080204480-pi9vflsb9klhgcggkjcuid214uhaa45q.apps.googleusercontent.com';
-
+    '431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com';
   // ============================================================
   // SUBMIT HANDLER
   // ============================================================
