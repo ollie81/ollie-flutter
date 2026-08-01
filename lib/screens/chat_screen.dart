@@ -53,6 +53,31 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _initAnimations();
     _generateParticles();
     _loadRewardedAd();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final history = await _api.getHistory();
+      if (!mounted || history.isEmpty) return;
+      setState(() {
+        _messages = history.map((msg) {
+          return ChatMessage(
+            text: msg['message'] ?? '',
+            isOllie: msg['sender'] == 'ollie',
+            time: DateTime.tryParse(msg['created_at'] ?? '') ?? DateTime.now(),
+          );
+        }).toList();
+      });
+      // Jump to the bottom once history has rendered.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
+    } catch (e) {
+      // History load failing should never block the chat from opening.
+    }
   }
 
   void _initAnimations() {
