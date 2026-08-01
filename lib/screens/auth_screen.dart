@@ -23,8 +23,18 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _otpController = TextEditingController();
   final ApiService _api = ApiService();
 
-  String _countryCode = '+250';
+  String _countryCode = '+1';
   String _fullPhoneNumber = '';
+  late final String _detectedCountryCode = _detectDeviceCountryCode();
+
+  static String _detectDeviceCountryCode() {
+    try {
+      final locale = WidgetsBinding.instance.platformDispatcher.locale;
+      final code = locale.countryCode;
+      if (code != null && code.isNotEmpty) return code;
+    } catch (_) {}
+    return 'US'; // neutral fallback if device locale is unavailable
+  }
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -364,7 +374,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         _countryCode = country.dialCode;
                       });
                     },
-                    initialCountryCode: 'RW',
+                    initialCountryCode: _detectedCountryCode,
                   ),
                   const SizedBox(height: 14),
 
