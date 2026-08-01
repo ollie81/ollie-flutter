@@ -534,6 +534,20 @@ class ApiService {
   // USAGE
   // ============================================================
 
+  Future<List<dynamic>> getHistory() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/history',
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['messages'] ?? [];
+    } else {
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>> getUsage() async {
     final response = await _authRequest(
       method: 'GET',
