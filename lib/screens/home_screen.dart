@@ -383,16 +383,6 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              _statusChip('happy', Icons.auto_awesome_rounded),
-              const SizedBox(width: 10),
-              _statusChip('thinking', Icons.graphic_eq_rounded),
-              const SizedBox(width: 10),
-              _statusChip('sleepy', Icons.nightlight_round),
-            ],
-          ),
-          const SizedBox(height: 18),
           _startButton(),
         ],
       ),
