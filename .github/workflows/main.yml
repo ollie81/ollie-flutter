@@ -30,6 +30,7 @@ jobs:
           keytool -list -v -keystore android/app/ollie-release.keystore \
             -alias ollie -storepass "${{ secrets.OLLIE_KEYSTORE_PASSWORD }}"
       - run: flutter pub get
+      - run: dart run flutter_launcher_icons
       - run: flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
         with:
