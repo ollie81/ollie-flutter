@@ -145,6 +145,7 @@ class ApiService {
       body: {
         'message': message,
         'history': history,
+        'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
       },
     );
 
