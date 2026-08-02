@@ -530,7 +530,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       ],
                     ),
                     child: Text(
-                      message.text,
+                      message.text.replaceAll(RegExp(r'\n{2,}'), '\n'),
                       style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
                     ),
                   ),
