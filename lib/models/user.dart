@@ -1,7 +1,7 @@
 class User {
   final String id;
   final String phoneNumber;
-  final String username;
+  final String username; 
   final String plan;
   final DateTime? planExpiresAt;
 
