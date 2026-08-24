@@ -38,6 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _dailyLimit = usage['daily_limit'] ?? 20;
         _hasActiveAdBonus = usage['has_active_ad_bonus'] ?? false;
         _isPremium = usage['is_premium'] ?? false;
+        _notificationsEnabled = usage['notifications_enabled'] ?? true;
         _loading = false;
       });
     } catch (e) {
