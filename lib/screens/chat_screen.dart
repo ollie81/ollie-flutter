@@ -22,6 +22,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
   final ApiService _api = ApiService();
 
   List<ChatMessage> _messages = [];
@@ -314,10 +315,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   // ============================================================
-  // VOICE — REMOVED
+  // VOICE — speaker only (real, hits the backend TTS endpoint).
+  // No mic/voice-input here on purpose — that side was a stub
+  // that just sent a hardcoded "hey" and never did real speech
+  // recognition, so it was left out rather than restored.
   // ============================================================
 
-  // Voice completely removed — no mic, no speaker
+  Future<void> _speakMessage(String message) async {
+    try {
+      final audioFile = await _api.sendVoiceMessage(message: message);
+      if (audioFile != null) {
+        await _audioPlayer.play(DeviceFileSource(audioFile.path));
+      }
+    } catch (e) {
+      _showError(e.toString());
+    }
+  }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -535,9 +548,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                // ============================================================
-                // SPEAKER BUTTON REMOVED — no voice on Ollie messages
-                // ============================================================
+                // Speaker only on Ollie messages
+                if (message.isOllie) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _speakMessage(message.text),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFFF8C6B).withOpacity(0.15),
+                        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
+                      ),
+                      child: const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 14),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -739,6 +766,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _gradientAnimationController.dispose();
     _waveAnimationController.dispose();
     _particleController.dispose();
+    _audioPlayer.dispose();
     _controller.dispose();
     _scrollController.dispose();
     _rewardedAd?.dispose();
