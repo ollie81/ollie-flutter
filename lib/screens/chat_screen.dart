@@ -195,7 +195,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // ============================================================
 
   Future<void> _sendMessage() async {
-    if (_controller.text.trim().isEmpty) return;
+    // Guards against a rapid double-tap (or Enter held down) firing
+    // a second /chat request while the first is still in flight --
+    // the backend's daily-cap check isn't safe against that race,
+    // so this is the first line of defense against it.
+    if (_isTyping || _controller.text.trim().isEmpty) return;
 
     final userMessage = _controller.text.trim();
     _updateEmotionalHeader(userMessage);
