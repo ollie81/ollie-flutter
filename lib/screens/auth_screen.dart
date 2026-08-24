@@ -42,6 +42,34 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _otpSent = false;
   bool _signupOtpSent = false;
   final TextEditingController _signupOtpController = TextEditingController();
+  DateTime? _dateOfBirth;
+
+  static const int _minSignupAgeYears = 13;
+
+  int _calculateAge(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(now.year - 100),
+      lastDate: now,
+    );
+    if (picked != null) {
+      setState(() => _dateOfBirth = picked);
+    }
+  }
 
   // Must match the Web client ID your backend (auth.py) verifies
   // Google ID tokens against. Without this, Android issues a token
@@ -84,6 +112,14 @@ class _AuthScreenState extends State<AuthScreen> {
           _showError('Passwords do not match');
           return;
         }
+        if (_dateOfBirth == null) {
+          _showError('Enter your date of birth');
+          return;
+        }
+        if (_calculateAge(_dateOfBirth!) < _minSignupAgeYears) {
+          _showError('You must be at least $_minSignupAgeYears years old to create an account');
+          return;
+        }
 
         if (!_signupOtpSent) {
           await _api.requestSignupOtp(phoneNumber: phone);
@@ -98,6 +134,7 @@ class _AuthScreenState extends State<AuthScreen> {
             phoneNumber: phone,
             password: _passwordController.text,
             otp: _signupOtpController.text.trim(),
+            dateOfBirth: _formatDate(_dateOfBirth!),
           );
           await _saveAndNavigate(phone);
         }
@@ -416,6 +453,44 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 14),
                   ],
 
+                  // Date of birth (signup only)
+                  if (_mode == AuthMode.signup) ...[
+                    GestureDetector(
+                      onTap: _isLoading ? null : _pickDateOfBirth,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.white.withOpacity(0.07),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.cake_outlined,
+                              color: const Color(0xFFFF8C6B).withOpacity(0.7),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _dateOfBirth == null
+                                  ? 'Date of birth'
+                                  : _formatDate(_dateOfBirth!),
+                              style: TextStyle(
+                                color: _dateOfBirth == null
+                                    ? Colors.white.withOpacity(0.3)
+                                    : Colors.white,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
                   // Signup OTP field
                   if (_mode == AuthMode.signup && _signupOtpSent) ...[
                     _buildTextField(
@@ -580,6 +655,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               _confirmController.clear();
                               _signupOtpSent = false;
                               _signupOtpController.clear();
+                              _dateOfBirth = null;
                             });
                           },
                           child: Text(
