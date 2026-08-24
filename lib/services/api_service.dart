@@ -207,6 +207,7 @@ class ApiService {
     required String phoneNumber,
     required String password,
     required String otp,
+    String? dateOfBirth,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/signup'),
@@ -215,6 +216,7 @@ class ApiService {
         'phone_number': phoneNumber,
         'password': password,
         'otp': otp,
+        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
       }),
     );
 
