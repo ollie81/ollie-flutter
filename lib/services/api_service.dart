@@ -160,7 +160,7 @@ class ApiService {
     }
   }
 
-  Future<File?> sendVoiceMessage({
+  Future<({File? file, int? voiceTrialSecondsRemaining})> sendVoiceMessage({
     required String message,
   }) async {
     final response = await _authRequest(
@@ -174,11 +174,13 @@ class ApiService {
       final file = File(
           '${tempDir.path}/ollie_voice_${DateTime.now().millisecondsSinceEpoch}.mp3');
       await file.writeAsBytes(response.bodyBytes);
-      return file;
+      // Absent for premium users (unlimited, nothing to count).
+      final remainingHeader = response.headers['x-voice-trial-remaining-seconds'];
+      return (file: file, voiceTrialSecondsRemaining: int.tryParse(remainingHeader ?? ''));
     } else if (response.statusCode == 402) {
       throw Exception('Voice replies require Ollie Premium');
     } else {
-      return null;
+      return (file: null, voiceTrialSecondsRemaining: null);
     }
   }
 
