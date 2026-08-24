@@ -7,6 +7,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
+import 'paywall_screen.dart';
 
 class ChatMessage {
   final String text;
@@ -212,6 +213,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _openPaywall() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+  }
+
   void _showLimitReachedSheet(String pendingMessage) {
     showModalBottomSheet(
       context: context,
@@ -277,6 +282,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
+                  _openPaywall();
                 },
                 child: Text(
                   'or subscribe for unlimited messages',
@@ -506,7 +512,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _openPaywall();
+                  },
                   child: const Text(
                     'go premium',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),

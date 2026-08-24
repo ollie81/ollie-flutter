@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'auth_screen.dart';
+import 'paywall_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String phoneNumber;
@@ -98,6 +99,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       _showError('Could not delete account, try again');
     }
+  }
+
+  Future<void> _openPaywall() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+    _loadUsage();
   }
 
   Future<void> _logout() async {
@@ -206,6 +212,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Plan',
                   _isPremium ? 'Premium' : 'Free',
                 ),
+                if (!_isPremium)
+                  _actionTile(
+                    Icons.workspace_premium_outlined,
+                    'Upgrade to Premium',
+                    onTap: _openPaywall,
+                  ),
 
                 _sectionLabel('Notifications'),
                 _switchTile(

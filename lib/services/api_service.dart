@@ -496,22 +496,26 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> activatePremium({
-    required String planType,
-    required int expiryDays,
+    required String purchaseToken,
+    required String productId,
   }) async {
     final response = await _authRequest(
       method: 'POST',
       endpoint: '/premium/activate',
       body: {
-        'plan_type': planType,
-        'expiry_days': expiryDays,
+        'purchase_token': purchaseToken,
+        'product_id': productId,
       },
     );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to activate premium');
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Failed to activate premium');
     }
   }
 
