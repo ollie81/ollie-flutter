@@ -639,6 +639,30 @@ class ApiService {
   // NOTIFICATIONS
   // ============================================================
 
+  Future<Map<String, dynamic>> getNotifications() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/notifications/',
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      return {'success': false, 'notifications': [], 'unread_count': 0};
+    }
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    try {
+      await _authRequest(
+        method: 'POST',
+        endpoint: '/notifications/$notificationId/read',
+      );
+    } catch (e) {
+      // Ignore
+    }
+  }
+
   Future<void> setNotificationsEnabled(bool enabled) async {
     try {
       await _authRequest(

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
 import 'paywall_screen.dart';
+import 'notifications_screen.dart';
 
 class ChatMessage {
   final String text;
@@ -39,6 +40,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   DateTime? _recordingStartedAt;
   String _emotionalHeader = "hey there 😊";
   int _currentStreak = 0;
+  int _unreadNotifications = 0;
 
   // ============================================================
   // AD-REWARD STATE
@@ -66,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _loadRewardedAd();
     _loadHistory();
     _loadStreak();
+    _loadUnreadCount();
   }
 
   Future<void> _loadStreak() async {
@@ -76,6 +79,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     } catch (e) {
       // Streak badge just stays hidden if this fails -- never block the chat.
     }
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final result = await _api.getNotifications();
+      final count = result['unread_count'];
+      if (mounted && count is int) setState(() => _unreadNotifications = count);
+    } catch (e) {
+      // Badge just stays hidden if this fails -- never block the chat.
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+    _loadUnreadCount();
   }
 
   void _applyStreak(Map<String, dynamic> response) {
@@ -659,9 +680,43 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             ],
           ),
           const Spacer(),
-          if (_currentStreak > 0) _buildStreakBadge(),
+          if (_currentStreak > 0) ...[
+            _buildStreakBadge(),
+            const SizedBox(width: 4),
+          ],
+          _buildNotificationBell(),
         ],
       ),
+    );
+  }
+
+  Widget _buildNotificationBell() {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+          onPressed: _openNotifications,
+        ),
+        if (_unreadNotifications > 0)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              constraints: const BoxConstraints(minWidth: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFF8C6B),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+              child: Text(
+                _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
