@@ -24,6 +24,14 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Required by google_mobile_ads: app crashes on launch without this.
+	     Test ID below is Google's official test App ID, safe for development.
+	     Swap for your real AdMob App ID (found in AdMob console > App settings)
+	     before public release. -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ollie uses your microphone so you can talk instead of type.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
