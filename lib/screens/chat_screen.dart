@@ -1,8 +1,12 @@
+import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
-import 'dart:math';
 
 class ChatMessage {
   final String text;
@@ -24,10 +28,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ApiService _api = ApiService();
+  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
 
   List<ChatMessage> _messages = [];
   bool _isTyping = false;
-  bool _isListening = false;
+  bool _isListening = false; // true while actively recording a voice message
+  bool _isTranscribing = false; // true while a recorded message is uploading/processing
+  bool _recorderInitialized = false;
+  DateTime? _recordingStartedAt;
   String _emotionalHeader = "hey there 😊";
 
   // ============================================================
@@ -315,10 +323,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   // ============================================================
-  // VOICE — speaker only (real, hits the backend TTS endpoint).
-  // No mic/voice-input here on purpose — that side was a stub
-  // that just sent a hardcoded "hey" and never did real speech
-  // recognition, so it was left out rather than restored.
+  // VOICE — OUTPUT (speaker, hits the backend TTS endpoint)
   // ============================================================
 
   Future<void> _speakMessage(String message) async {
@@ -328,8 +333,202 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         await _audioPlayer.play(DeviceFileSource(audioFile.path));
       }
     } catch (e) {
-      _showError(e.toString());
+      final text = e.toString().replaceFirst('Exception: ', '');
+      if (text.contains('Premium')) {
+        _showVoicePremiumSheet();
+      } else {
+        _showError(text);
+      }
     }
+  }
+
+  // ============================================================
+  // VOICE — INPUT (real mic recording + transcription). Hold the
+  // mic button to record, release to send. Premium-only, same as
+  // the speaker — see /chat/voice on the backend.
+  // ============================================================
+
+  Future<bool> _initRecorder() async {
+    if (_recorderInitialized) return true;
+    try {
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        _showError('Microphone permission is needed to send a voice message');
+        return false;
+      }
+      await _recorder.openRecorder();
+      _recorderInitialized = true;
+      return true;
+    } catch (e) {
+      _showError('Could not access the microphone');
+      return false;
+    }
+  }
+
+  Future<void> _startRecording() async {
+    if (_isListening || _isTranscribing) return;
+
+    final ready = await _initRecorder();
+    if (!ready) return;
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final path = '${tempDir.path}/ollie_voice_message_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.startRecorder(
+        toFile: path,
+        codec: Codec.aacMP4,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+      _recordingStartedAt = DateTime.now();
+      setState(() => _isListening = true);
+    } catch (e) {
+      _showError('Could not start recording');
+    }
+  }
+
+  Future<void> _stopRecordingAndSend() async {
+    if (!_isListening) return;
+
+    setState(() => _isListening = false);
+
+    String? path;
+    try {
+      path = await _recorder.stopRecorder();
+    } catch (e) {
+      _showError('Recording failed');
+      return;
+    }
+
+    final startedAt = _recordingStartedAt;
+    _recordingStartedAt = null;
+
+    // Ignore accidental taps -- anything under half a second isn't
+    // a real voice message.
+    if (path == null || startedAt == null || DateTime.now().difference(startedAt) < const Duration(milliseconds: 500)) {
+      return;
+    }
+
+    setState(() => _isTranscribing = true);
+
+    try {
+      final response = await _api.sendVoiceChat(File(path));
+      final transcribed = (response['transcribed_text'] as String?)?.trim();
+      final reply = response['reply'] as String?;
+
+      if (transcribed == null || transcribed.isEmpty || reply == null) {
+        _showError("couldn't hear anything in that recording");
+        return;
+      }
+
+      _updateEmotionalHeader(transcribed);
+      setState(() {
+        _messages.add(ChatMessage(text: transcribed, isOllie: false, time: DateTime.now()));
+        _messages.add(ChatMessage(text: reply, isOllie: true, time: DateTime.now()));
+      });
+      _updateEmotionalHeader(reply);
+      _scrollToBottom();
+    } catch (e) {
+      final text = e.toString().replaceFirst('Exception: ', '');
+      if (text.contains('Premium')) {
+        _showVoicePremiumSheet();
+      } else {
+        _showError(text);
+      }
+    } finally {
+      if (mounted) setState(() => _isTranscribing = false);
+    }
+  }
+
+  // ============================================================
+  // VOICE PREVIEW — free, short, fixed sample so someone can
+  // hear what Ollie sounds like before deciding to go premium.
+  // ============================================================
+
+  bool _isPreviewing = false;
+
+  Future<void> _playVoicePreview() async {
+    if (_isPreviewing) return;
+    setState(() => _isPreviewing = true);
+    try {
+      final audioFile = await _api.getVoicePreview();
+      if (audioFile != null) {
+        await _audioPlayer.play(DeviceFileSource(audioFile.path));
+      }
+    } catch (e) {
+      _showError(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isPreviewing = false);
+    }
+  }
+
+  void _showVoicePremiumSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Icon(Icons.mic_rounded, color: Color(0xFFFF8C6B), size: 32),
+              const SizedBox(height: 12),
+              const Text(
+                "talking with ollie is a premium thing",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "go premium to talk to ollie and hear him talk back, anytime",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C6B),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'go premium',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _playVoicePreview();
+                },
+                child: Text(
+                  "hear a quick sample first",
+                  style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showError(String message) {
@@ -622,6 +821,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             'How are you feeling?',
             style: TextStyle(color: Colors.grey.withOpacity(0.7), fontSize: 14),
           ),
+          const SizedBox(height: 20),
+          TextButton.icon(
+            onPressed: _isPreviewing ? null : _playVoicePreview,
+            icon: _isPreviewing
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C6B)),
+                  )
+                : const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 18),
+            label: Text(
+              "hear what ollie sounds like",
+              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+            ),
+          ),
         ],
       ),
     );
@@ -708,9 +922,39 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
-          // ============================================================
-          // VOICE BUTTON REMOVED — no mic
-          // ============================================================
+          // Hold to record a voice message, release to send.
+          GestureDetector(
+            onLongPressStart: (_) => _startRecording(),
+            onLongPressEnd: (_) => _stopRecordingAndSend(),
+            onLongPressCancel: () => _stopRecordingAndSend(),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 48,
+              height: 48,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _isListening
+                    ? const Color(0xFFE53935).withOpacity(0.25)
+                    : Colors.white.withOpacity(0.07),
+                border: Border.all(
+                  color: _isListening
+                      ? const Color(0xFFE53935)
+                      : Colors.white.withOpacity(0.1),
+                ),
+              ),
+              child: _isTranscribing
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C6B)),
+                    )
+                  : Icon(
+                      _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                      color: _isListening ? const Color(0xFFE53935) : Colors.white.withOpacity(0.7),
+                      size: 22,
+                    ),
+            ),
+          ),
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -770,6 +1014,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _controller.dispose();
     _scrollController.dispose();
     _rewardedAd?.dispose();
+    if (_recorderInitialized) {
+      _recorder.closeRecorder();
+    }
     super.dispose();
   }
 }
