@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import '../services/purchase_service.dart';
@@ -46,6 +47,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
   Map<String, ProductDetails> _products = {};
   StreamSubscription<PurchaseUiEvent>? _uiSubscription;
 
+  // The backend only verifies Google Play purchases so far (see
+  // premium.py's /activate -- it's Android Publisher API only, no
+  // Apple App Store Server API support yet). A real purchase would
+  // still go through on iOS via StoreKit, charging the user, and
+  // then fail to activate anything -- so block it here rather than
+  // ship that. Remove this once the backend can verify Apple receipts.
+  bool get _iosNotYetSupported => Platform.isIOS;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +70,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   Future<void> _load() async {
+    if (_iosNotYetSupported) {
+      setState(() => _loading = false);
+      return;
+    }
+
     final available = await PurchaseService.instance.isAvailable();
     if (!mounted) return;
     if (!available) {
@@ -150,18 +164,20 @@ class _PaywallScreenState extends State<PaywallScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF8C6B)))
-          : !_storeAvailable
-              ? _buildUnavailable()
-              : _buildTiers(),
+          : _iosNotYetSupported
+              ? _buildMessage("premium on iOS is coming soon — for now, premium is available on Android")
+              : !_storeAvailable
+                  ? _buildMessage("purchases aren't available on this device right now")
+                  : _buildTiers(),
     );
   }
 
-  Widget _buildUnavailable() {
+  Widget _buildMessage(String message) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          "purchases aren't available on this device right now",
+          message,
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 15),
         ),
