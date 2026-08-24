@@ -619,17 +619,18 @@ class ApiService {
   Future<Map<String, dynamic>> getUsage() async {
     final response = await _authRequest(
       method: 'GET',
-      endpoint: '/user/usage',
+      endpoint: '/settings/usage',
     );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
       return {
-        'daily_messages': 0,
-        'daily_voice_minutes': 0,
+        'messages_used_today': 0,
         'daily_limit': 20,
-        'voice_limit_minutes': 1,
+        'has_active_ad_bonus': false,
+        'is_premium': false,
+        'current_streak': 0,
       };
     }
   }
@@ -641,8 +642,8 @@ class ApiService {
   Future<void> setNotificationsEnabled(bool enabled) async {
     try {
       await _authRequest(
-        method: 'POST',
-        endpoint: '/user/notifications',
+        method: 'PUT',
+        endpoint: '/settings/notifications',
         body: {'enabled': enabled},
       );
     } catch (e) {
@@ -657,8 +658,8 @@ class ApiService {
   Future<void> clearMemory() async {
     try {
       await _authRequest(
-        method: 'POST',
-        endpoint: '/user/clear-memory',
+        method: 'DELETE',
+        endpoint: '/settings/memory',
       );
     } catch (e) {
       // Ignore
@@ -672,7 +673,7 @@ class ApiService {
   Future<void> deleteAccount() async {
     final response = await _authRequest(
       method: 'DELETE',
-      endpoint: '/user/delete',
+      endpoint: '/settings/account',
     );
 
     if (response.statusCode == 200) {
