@@ -175,8 +175,69 @@ class ApiService {
           '${tempDir.path}/ollie_voice_${DateTime.now().millisecondsSinceEpoch}.mp3');
       await file.writeAsBytes(response.bodyBytes);
       return file;
+    } else if (response.statusCode == 402) {
+      throw Exception('Voice replies require Ollie Premium');
+    } else {
+      return null;
+    }
+  }
+
+  // ============================================================
+  // VOICE INPUT — record a message, get it transcribed + a real
+  // reply back in one call. Premium-only, same as sendVoiceMessage.
+  // ============================================================
+
+  Future<http.StreamedResponse> _sendVoiceChatRequest(File audioFile, String? token) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/voice'));
+    request.headers['Authorization'] = 'Bearer $token';
+    request.fields['utc_offset_minutes'] = DateTime.now().timeZoneOffset.inMinutes.toString();
+    request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path));
+    return await request.send();
+  }
+
+  Future<Map<String, dynamic>> sendVoiceChat(File audioFile) async {
+    var token = await getAccessToken();
+    var response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token));
+
+    // Same single-retry-after-refresh pattern as _authRequest.
+    if (response.statusCode == 401) {
+      final refreshed = await refreshAccessToken();
+      if (refreshed) {
+        token = await getAccessToken();
+        response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token));
+      }
+    }
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else if (response.statusCode == 402) {
+      throw Exception('Voice chat requires Ollie Premium');
+    } else if (response.statusCode == 401) {
+      throw Exception('Session expired. Please log in again.');
+    } else {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Failed to process voice message');
+    }
+  }
+
+  // ============================================================
+  // VOICE PREVIEW — free, short, fixed sample of Ollie's voice.
+  // ============================================================
+
+  Future<File?> getVoicePreview() async {
+    final response = await _authRequest(method: 'POST', endpoint: '/speak/preview');
+
+    if (response.statusCode == 200) {
+      final tempDir = await getTemporaryDirectory();
+      final file = File(
+          '${tempDir.path}/ollie_preview_${DateTime.now().millisecondsSinceEpoch}.mp3');
+      await file.writeAsBytes(response.bodyBytes);
+      return file;
     } else if (response.statusCode == 429) {
-      throw Exception('Voice limit reached (1 minute per day)');
+      throw Exception("you've heard enough of him for today — try again tomorrow");
     } else {
       return null;
     }
