@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'auth_screen.dart';
 import 'paywall_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String phoneNumber;
@@ -237,6 +238,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 _sectionLabel('About'),
                 _infoTile(Icons.info_outline, 'Ollie', 'Made in Rwanda 🇷🇼'),
+                _actionTile(
+                  Icons.privacy_tip_outlined,
+                  'Privacy Policy',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                  ),
+                ),
                 const SizedBox(height: 40),
               ],
             ),
