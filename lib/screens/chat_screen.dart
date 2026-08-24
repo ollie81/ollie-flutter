@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -43,6 +44,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   int _unreadNotifications = 0;
 
   // ============================================================
+  // VOICE PLAYBACK STATE — elapsed seconds on whichever message is
+  // currently playing, plus the free trial balance for non-premium
+  // users (null once/if the user is premium -- unlimited, nothing
+  // to count).
+  // ============================================================
+  ChatMessage? _playingMessage;
+  int _playingElapsedSeconds = 0;
+  Timer? _playbackTimer;
+  int? _voiceTrialSecondsRemaining;
+
+  // ============================================================
   // AD-REWARD STATE
   // ============================================================
   static const String _rewardedAdUnitId =
@@ -69,6 +81,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _loadHistory();
     _loadStreak();
     _loadUnreadCount();
+    _audioPlayer.onPlayerComplete.listen((_) => _stopPlaybackTimer());
   }
 
   Future<void> _loadStreak() async {
@@ -76,8 +89,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final usage = await _api.getUsage();
       final streak = usage['current_streak'];
       if (mounted && streak is int) setState(() => _currentStreak = streak);
+
+      final remaining = usage['voice_trial_seconds_remaining'];
+      if (mounted && remaining is int) setState(() => _voiceTrialSecondsRemaining = remaining);
     } catch (e) {
-      // Streak badge just stays hidden if this fails -- never block the chat.
+      // Streak badge / trial balance just stay hidden if this fails -- never block the chat.
     }
   }
 
@@ -375,11 +391,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // VOICE — OUTPUT (speaker, hits the backend TTS endpoint)
   // ============================================================
 
-  Future<void> _speakMessage(String message) async {
+  Future<void> _speakMessage(ChatMessage message) async {
     try {
-      final audioFile = await _api.sendVoiceMessage(message: message);
-      if (audioFile != null) {
-        await _audioPlayer.play(DeviceFileSource(audioFile.path));
+      final result = await _api.sendVoiceMessage(message: message.text);
+      if (result.voiceTrialSecondsRemaining != null && mounted) {
+        setState(() => _voiceTrialSecondsRemaining = result.voiceTrialSecondsRemaining);
+      }
+      if (result.file != null) {
+        _startPlaybackTimer(message);
+        await _audioPlayer.play(DeviceFileSource(result.file!.path));
       }
     } catch (e) {
       final text = e.toString().replaceFirst('Exception: ', '');
@@ -389,6 +409,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _showError(text);
       }
     }
+  }
+
+  void _startPlaybackTimer(ChatMessage message) {
+    _playbackTimer?.cancel();
+    setState(() {
+      _playingMessage = message;
+      _playingElapsedSeconds = 0;
+    });
+    _playbackTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _playingElapsedSeconds++);
+    });
+  }
+
+  void _stopPlaybackTimer() {
+    _playbackTimer?.cancel();
+    _playbackTimer = null;
+    if (mounted) setState(() => _playingMessage = null);
   }
 
   // ============================================================
@@ -783,6 +820,55 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
+  String _formatElapsed(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '$minutes:${secs.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildSpeakerControl(ChatMessage message) {
+    final isPlayingThis = identical(_playingMessage, message);
+
+    if (!isPlayingThis) {
+      return GestureDetector(
+        onTap: () => _speakMessage(message),
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFFF8C6B).withOpacity(0.15),
+            border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
+          ),
+          child: const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 14),
+        ),
+      );
+    }
+
+    final trialSuffix = _voiceTrialSecondsRemaining != null
+        ? ' · ${_voiceTrialSecondsRemaining}s left'
+        : '';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFFFF8C6B).withOpacity(0.15),
+        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.graphic_eq_rounded, color: Color(0xFFFF8C6B), size: 14),
+          const SizedBox(width: 6),
+          Text(
+            '${_formatElapsed(_playingElapsedSeconds)}$trialSuffix',
+            style: const TextStyle(color: Color(0xFFFF8C6B), fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageList() {
     if (_messages.isEmpty) {
       return _buildEmptyState();
@@ -861,19 +947,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 // Speaker only on Ollie messages
                 if (message.isOllie) ...[
                   const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => _speakMessage(message.text),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFFFF8C6B).withOpacity(0.15),
-                        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
-                      ),
-                      child: const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 14),
-                    ),
-                  ),
+                  _buildSpeakerControl(message),
                 ],
               ],
             ),
@@ -1121,6 +1195,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _gradientAnimationController.dispose();
     _waveAnimationController.dispose();
     _particleController.dispose();
+    _playbackTimer?.cancel();
     _audioPlayer.dispose();
     _controller.dispose();
     _scrollController.dispose();
