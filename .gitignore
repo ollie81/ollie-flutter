@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release signing secrets -- created when following Flutter's Android
+# release-signing guide. Never commit these; the keystore password
+# can't be rotated without losing your Play Store app identity.
+/android/key.properties
+*.jks
+*.keystore
