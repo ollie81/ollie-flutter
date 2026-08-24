@@ -4,6 +4,7 @@ import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import 'home_screen.dart';
 
 enum AuthMode { login, signup, forgot }
@@ -177,10 +178,30 @@ class _AuthScreenState extends State<AuthScreen> {
   // NAVIGATION HELPERS
   // ============================================================
 
+  // Previously the FCM token was only ever saved on a full app
+  // cold start while already logged in (see main.dart) — meaning a
+  // brand new signup, or anyone who doesn't fully restart the app
+  // after logging in, never got a token registered at all, so
+  // push notifications (including reminders) silently never
+  // arrived. Registering right after a successful login/signup
+  // closes that gap. Never blocks navigation if it fails.
+  Future<void> _registerFcmToken() async {
+    try {
+      final fcmToken = await NotificationService.getFCMToken();
+      if (fcmToken != null) {
+        await _api.saveFcmToken(fcmToken);
+      }
+    } catch (_) {
+      // Best-effort — a failed registration here shouldn't block
+      // the user from getting into the app.
+    }
+  }
+
   Future<void> _saveAndNavigate(String phone) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phoneNumber', phone);
     await prefs.setBool('is_logged_in', true);
+    await _registerFcmToken();
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -266,6 +287,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', true);
       await prefs.setString('phoneNumber', googleUser.email);
+      await _registerFcmToken();
 
       if (mounted) {
         Navigator.pushReplacement(
