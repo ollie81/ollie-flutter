@@ -8,6 +8,7 @@ import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'services/purchase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +22,12 @@ void main() async {
   
   // Initialize Google Ads
   await MobileAds.instance.initialize();
-  
+
+  // Start listening for purchase updates as early as possible, so a
+  // purchase that resolves after the app was closed (or completes
+  // outside the paywall screen) still gets activated on the backend.
+  PurchaseService.instance.init();
+
   runApp(const OllieApp());
 }
 
