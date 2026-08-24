@@ -38,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _recorderInitialized = false;
   DateTime? _recordingStartedAt;
   String _emotionalHeader = "hey there 😊";
+  int _currentStreak = 0;
 
   // ============================================================
   // AD-REWARD STATE
@@ -64,6 +65,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _generateParticles();
     _loadRewardedAd();
     _loadHistory();
+    _loadStreak();
+  }
+
+  Future<void> _loadStreak() async {
+    try {
+      final usage = await _api.getUsage();
+      final streak = usage['current_streak'];
+      if (mounted && streak is int) setState(() => _currentStreak = streak);
+    } catch (e) {
+      // Streak badge just stays hidden if this fails -- never block the chat.
+    }
+  }
+
+  void _applyStreak(Map<String, dynamic> response) {
+    final streak = response['streak'];
+    if (streak is int) setState(() => _currentStreak = streak);
   }
 
   Future<void> _loadHistory() async {
@@ -182,6 +199,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       setState(() {
         _messages.add(ChatMessage(text: response['reply'], isOllie: true, time: DateTime.now()));
       });
+      _applyStreak(response);
       _scrollToBottom();
     } catch (e) {
       setState(() => _isTyping = false);
@@ -432,6 +450,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _messages.add(ChatMessage(text: transcribed, isOllie: false, time: DateTime.now()));
         _messages.add(ChatMessage(text: reply, isOllie: true, time: DateTime.now()));
       });
+      _applyStreak(response);
       _updateEmotionalHeader(reply);
       _scrollToBottom();
     } catch (e) {
@@ -638,6 +657,30 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               Text('Ollie', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
               Text('always here', style: TextStyle(color: Colors.grey, fontSize: 12)),
             ],
+          ),
+          const Spacer(),
+          if (_currentStreak > 0) _buildStreakBadge(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStreakBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFFFF8C6B).withOpacity(0.15),
+        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Text(
+            '$_currentStreak',
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ],
       ),
