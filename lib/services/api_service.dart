@@ -186,7 +186,9 @@ class ApiService {
 
   // ============================================================
   // VOICE INPUT — record a message, get it transcribed + a real
-  // reply back in one call. Premium-only, same as sendVoiceMessage.
+  // reply back in one call. Shares the same free trial as
+  // sendVoiceMessage/'/speak' (see voice_trial_seconds_remaining
+  // in the returned map below) — premium is unlimited.
   // ============================================================
 
   Future<http.StreamedResponse> _sendVoiceChatRequest(File audioFile, String? token) async {

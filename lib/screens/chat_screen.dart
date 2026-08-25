@@ -120,6 +120,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (streak is int) setState(() => _currentStreak = streak);
   }
 
+  void _applyVoiceTrialRemaining(Map<String, dynamic> response) {
+    // Absent for premium users (unlimited, nothing to count) --
+    // same convention as sendVoiceMessage's header-based version.
+    final remaining = response['voice_trial_seconds_remaining'];
+    if (remaining is int) setState(() => _voiceTrialSecondsRemaining = remaining);
+  }
+
   Future<void> _loadHistory() async {
     try {
       final history = await _api.getHistory();
@@ -430,8 +437,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   // ============================================================
   // VOICE — INPUT (real mic recording + transcription). Hold the
-  // mic button to record, release to send. Premium-only, same as
-  // the speaker — see /chat/voice on the backend.
+  // mic button to record, release to send. Shares the same free
+  // trial balance as the speaker icon — see /chat/voice on the
+  // backend.
   // ============================================================
 
   Future<bool> _initRecorder() async {
@@ -513,6 +521,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _messages.add(ChatMessage(text: reply, isOllie: true, time: DateTime.now()));
       });
       _applyStreak(response);
+      _applyVoiceTrialRemaining(response);
       _updateEmotionalHeader(reply);
       _scrollToBottom();
     } catch (e) {
