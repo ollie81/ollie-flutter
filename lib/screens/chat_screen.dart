@@ -53,6 +53,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   int _playingElapsedSeconds = 0;
   Timer? _playbackTimer;
   int? _voiceTrialSecondsRemaining;
+  // Gates auto-speaking Ollie's replies (see _maybeAutoSpeak) --
+  // free/trial users keep manual tap-to-hear so their one-time
+  // trial stays under their own control instead of being spent
+  // automatically on every reply.
+  bool _isPremium = false;
 
   // ============================================================
   // AD-REWARD STATE
@@ -92,8 +97,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
       final remaining = usage['voice_trial_seconds_remaining'];
       if (mounted && remaining is int) setState(() => _voiceTrialSecondsRemaining = remaining);
+
+      final isPremium = usage['is_premium'];
+      if (mounted && isPremium is bool) setState(() => _isPremium = isPremium);
     } catch (e) {
-      // Streak badge / trial balance just stay hidden if this fails -- never block the chat.
+      // Streak badge / trial balance / premium status just stay at
+      // their defaults if this fails -- never block the chat.
     }
   }
 
@@ -244,11 +253,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       setState(() => _isTyping = false);
       _updateEmotionalHeader(response['reply']);
 
+      final ollieMessage = ChatMessage(text: response['reply'], isOllie: true, time: DateTime.now());
       setState(() {
-        _messages.add(ChatMessage(text: response['reply'], isOllie: true, time: DateTime.now()));
+        _messages.add(ollieMessage);
       });
       _applyStreak(response);
       _scrollToBottom();
+      _maybeAutoSpeak(ollieMessage);
     } catch (e) {
       setState(() => _isTyping = false);
 
@@ -418,6 +429,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  // Premium hears every reply automatically, no tap needed --
+  // free/trial users keep the manual speaker icon (see _isPremium)
+  // so their one-time trial isn't spent without them choosing to.
+  // Not awaited -- playback runs in the background, callers don't
+  // wait on it before moving on.
+  void _maybeAutoSpeak(ChatMessage message) {
+    if (_isPremium) _speakMessage(message);
+  }
+
   void _startPlaybackTimer(ChatMessage message) {
     _playbackTimer?.cancel();
     setState(() {
@@ -516,14 +536,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
 
       _updateEmotionalHeader(transcribed);
+      final ollieMessage = ChatMessage(text: reply, isOllie: true, time: DateTime.now());
       setState(() {
         _messages.add(ChatMessage(text: transcribed, isOllie: false, time: DateTime.now()));
-        _messages.add(ChatMessage(text: reply, isOllie: true, time: DateTime.now()));
+        _messages.add(ollieMessage);
       });
       _applyStreak(response);
       _applyVoiceTrialRemaining(response);
       _updateEmotionalHeader(reply);
       _scrollToBottom();
+      _maybeAutoSpeak(ollieMessage);
     } catch (e) {
       final text = e.toString().replaceFirst('Exception: ', '');
       if (text.contains('Premium')) {
