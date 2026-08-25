@@ -180,7 +180,17 @@ class ApiService {
     } else if (response.statusCode == 402) {
       throw Exception('Voice replies require Ollie Premium');
     } else {
-      return (file: null, voiceTrialSecondsRemaining: null);
+      // Was: silently returning nulls here, which _speakMessage
+      // treats as "nothing to play" -- indistinguishable from a
+      // real failure, since no error ever surfaced. Throwing here
+      // (same pattern as sendVoiceChat) lets the actual backend
+      // detail reach the user instead of the request just going
+      // quiet with no explanation.
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not generate voice reply');
     }
   }
 
@@ -243,7 +253,16 @@ class ApiService {
     } else if (response.statusCode == 429) {
       throw Exception("you've heard enough of him for today — try again tomorrow");
     } else {
-      return null;
+      // Was: silently returning null here, which _playVoicePreview
+      // treats as "nothing to play" with no error shown -- the
+      // request could be failing for any reason (TTS misconfigured,
+      // upstream outage...) and nothing would ever tell the user
+      // why. Throwing surfaces the real backend detail instead.
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not play voice preview');
     }
   }
 
