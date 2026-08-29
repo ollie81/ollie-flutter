@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -243,6 +244,33 @@ class ApiService {
   // sendMessage/'/chat' -- a shared photo isn't a premium feature.
   // ============================================================
 
+  // Sniffs the actual image format from its bytes rather than
+  // trusting the OS-picked file's name/extension -- image_picker's
+  // temp files don't always carry a recognizable one (camera vs.
+  // gallery vs. device differ), and MultipartFile.fromPath falls
+  // back to application/octet-stream with no contentType given,
+  // which the backend correctly rejects as "not an image".
+  MediaType _sniffImageMediaType(List<int> bytes) {
+    if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+      return MediaType('image', 'jpeg');
+    }
+    if (bytes.length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+      return MediaType('image', 'png');
+    }
+    if (bytes.length >= 6 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+      return MediaType('image', 'gif');
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+        bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+      return MediaType('image', 'webp');
+    }
+    // Fall back to jpeg -- by far the most common phone camera/
+    // gallery format, and still passes the backend's "starts with
+    // image/" check even when this specific guess is imperfect.
+    return MediaType('image', 'jpeg');
+  }
+
   Future<http.StreamedResponse> _sendImageChatRequest(File imageFile, String? caption, String? token) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/image'));
     request.headers['Authorization'] = 'Bearer $token';
@@ -250,7 +278,13 @@ class ApiService {
     if (caption != null && caption.trim().isNotEmpty) {
       request.fields['caption'] = caption.trim();
     }
-    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+    final bytes = await imageFile.readAsBytes();
+    request.files.add(http.MultipartFile.fromBytes(
+      'image',
+      bytes,
+      filename: 'photo.jpg',
+      contentType: _sniffImageMediaType(bytes),
+    ));
     return await request.send();
   }
 
