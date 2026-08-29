@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
@@ -15,7 +16,12 @@ class ChatMessage {
   final String text;
   final bool isOllie;
   final DateTime time;
-  ChatMessage({required this.text, required this.isOllie, required this.time});
+  // Only ever set on a message the user just sent this session --
+  // the photo itself isn't persisted server-side (same principle
+  // as voice messages only keeping the transcript), so it won't
+  // reappear after a reload from history.
+  final File? imageFile;
+  ChatMessage({required this.text, required this.isOllie, required this.time, this.imageFile});
 }
 
 class ChatScreen extends StatefulWidget {
@@ -32,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ApiService _api = ApiService();
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+  final ImagePicker _imagePicker = ImagePicker();
 
   List<ChatMessage> _messages = [];
   bool _isTyping = false;
@@ -398,6 +405,331 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           await _api.watchAdBonus();
           setState(() => _isTyping = true);
           await _requestOllieReply(pendingMessage);
+        } catch (e) {
+          _showError("couldn't unlock bonus messages, try again");
+        }
+      },
+    );
+  }
+
+  // ============================================================
+  // IMAGE INPUT — share a photo, get a real reaction to it. Free
+  // tier, same daily cap as text (see /chat/image on the backend).
+  // ============================================================
+
+  void _showAttachmentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildAttachmentOption(
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Take a photo',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndPreviewImage(ImageSource.camera);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _buildAttachmentOption(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Choose from gallery',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndPreviewImage(ImageSource.gallery);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAttachmentOption({required IconData icon, required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFFF8C6B).withOpacity(0.15),
+              ),
+              child: Icon(icon, color: const Color(0xFFFF8C6B), size: 20),
+            ),
+            const SizedBox(width: 14),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndPreviewImage(ImageSource source) async {
+    try {
+      final picked = await _imagePicker.pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+      if (picked == null || !mounted) return;
+      _showImagePreviewSheet(File(picked.path));
+    } catch (e) {
+      _showError('Could not access ${source == ImageSource.camera ? 'the camera' : 'your photos'}');
+    }
+  }
+
+  void _showImagePreviewSheet(File imageFile) {
+    final captionController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.file(
+                      imageFile,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 260,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.white.withOpacity(0.07),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: TextField(
+                      controller: captionController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Add a caption (optional)',
+                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF8C6B),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _sendImageMessage(imageFile, captionController.text);
+                      },
+                      child: const Text(
+                        'Send to Ollie',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _sendImageMessage(File imageFile, String? caption) async {
+    if (_isTyping) return;
+    final trimmedCaption = caption?.trim();
+
+    setState(() {
+      _messages.add(ChatMessage(
+        text: trimmedCaption ?? '',
+        isOllie: false,
+        time: DateTime.now(),
+        imageFile: imageFile,
+      ));
+    });
+    if (trimmedCaption != null && trimmedCaption.isNotEmpty) {
+      _updateEmotionalHeader(trimmedCaption);
+    }
+    _scrollToBottom();
+    await _requestImageReaction(imageFile, trimmedCaption);
+  }
+
+  Future<void> _requestImageReaction(File imageFile, String? caption) async {
+    setState(() => _isTyping = true);
+    try {
+      final response = await _api.sendImageMessage(imageFile, caption: caption);
+      setState(() => _isTyping = false);
+
+      final reply = response['reply'] as String?;
+      if (reply == null) {
+        _showError("couldn't get a reply for that photo");
+        return;
+      }
+
+      final ollieMessage = ChatMessage(text: reply, isOllie: true, time: DateTime.now());
+      setState(() => _messages.add(ollieMessage));
+      _applyStreak(response);
+      _updateEmotionalHeader(reply);
+      _scrollToBottom();
+      _maybeAutoSpeak(ollieMessage);
+    } catch (e) {
+      setState(() => _isTyping = false);
+      if (e.toString().contains('Daily limit reached')) {
+        _showImageLimitReachedSheet(imageFile, caption);
+      } else {
+        _showError(e.toString().replaceFirst('Exception: ', ''));
+      }
+    }
+  }
+
+  void _showImageLimitReachedSheet(File imageFile, String? caption) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "you're out of free messages for today",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "watch a quick ad for 10 more minutes with ollie",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C6B),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _watchAdForImageBonus(imageFile, caption);
+                  },
+                  child: const Text(
+                    'watch ad for 10 more minutes',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _openPaywall();
+                },
+                child: Text(
+                  'or subscribe for unlimited messages',
+                  style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _watchAdForImageBonus(File imageFile, String? caption) {
+    if (_rewardedAd == null) {
+      _showError("ad not ready yet — try again in a moment");
+      _loadRewardedAd();
+      return;
+    }
+
+    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _loadRewardedAd();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _loadRewardedAd();
+        _showError("couldn't show ad, try again");
+      },
+    );
+
+    _rewardedAd!.show(
+      onUserEarnedReward: (ad, reward) async {
+        try {
+          await _api.watchAdBonus();
+          await _requestImageReaction(imageFile, caption);
         } catch (e) {
           _showError("couldn't unlock bonus messages, try again");
         }
@@ -910,6 +1242,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       itemCount: _messages.length,
       itemBuilder: (context, index) {
         final message = _messages[index];
+        final hasImage = message.imageFile != null;
+        final hasCaption = message.text.trim().isNotEmpty;
+        final bubbleRadius = BorderRadius.only(
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
+          bottomLeft: message.isOllie ? const Radius.circular(4) : const Radius.circular(20),
+          bottomRight: message.isOllie ? const Radius.circular(20) : const Radius.circular(4),
+        );
         return AnimatedOpacity(
           opacity: 1,
           duration: const Duration(milliseconds: 400),
@@ -935,15 +1275,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 // Message bubble
                 Flexible(
                   child: Container(
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (hasImage ? 0.68 : 0.7)),
+                    padding: hasImage
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(20),
-                        topRight: const Radius.circular(20),
-                        bottomLeft: message.isOllie ? const Radius.circular(4) : const Radius.circular(20),
-                        bottomRight: message.isOllie ? const Radius.circular(20) : const Radius.circular(4),
-                      ),
+                      borderRadius: bubbleRadius,
                       gradient: message.isOllie
                           ? LinearGradient(
                               begin: Alignment.topLeft,
@@ -969,10 +1306,36 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         ),
                       ],
                     ),
-                    child: Text(
-                      message.text.replaceAll(RegExp(r'\n{2,}'), '\n'),
-                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
-                    ),
+                    child: hasImage
+                        ? ClipRRect(
+                            borderRadius: bubbleRadius,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxHeight: 260),
+                                  child: Image.file(
+                                    message.imageFile!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                  ),
+                                ),
+                                if (hasCaption)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    child: Text(
+                                      message.text,
+                                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          )
+                        : Text(
+                            message.text.replaceAll(RegExp(r'\n{2,}'), '\n'),
+                            style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                          ),
                   ),
                 ),
                 // Speaker only on Ollie messages
@@ -1138,6 +1501,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
+          // Share a photo with Ollie.
+          GestureDetector(
+            onTap: _showAttachmentSheet,
+            child: Container(
+              width: 44,
+              height: 44,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.07),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Icon(Icons.camera_alt_rounded, color: Colors.white.withOpacity(0.7), size: 20),
+            ),
+          ),
           // Hold to record a voice message, release to send.
           GestureDetector(
             onLongPressStart: (_) => _startRecording(),

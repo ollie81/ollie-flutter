@@ -180,7 +180,17 @@ class ApiService {
     } else if (response.statusCode == 402) {
       throw Exception('Voice replies require Ollie Premium');
     } else {
-      return (file: null, voiceTrialSecondsRemaining: null);
+      // Was: silently returning nulls here, which _speakMessage
+      // treats as "nothing to play" -- indistinguishable from a
+      // real failure, since no error ever surfaced. Throwing here
+      // (same pattern as sendVoiceChat) lets the actual backend
+      // detail reach the user instead of the request just going
+      // quiet with no explanation.
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not generate voice reply');
     }
   }
 
@@ -228,6 +238,51 @@ class ApiService {
   }
 
   // ============================================================
+  // IMAGE INPUT — send a photo (with an optional caption), get a
+  // real reaction to it. Free tier, same daily message cap as
+  // sendMessage/'/chat' -- a shared photo isn't a premium feature.
+  // ============================================================
+
+  Future<http.StreamedResponse> _sendImageChatRequest(File imageFile, String? caption, String? token) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/image'));
+    request.headers['Authorization'] = 'Bearer $token';
+    request.fields['utc_offset_minutes'] = DateTime.now().timeZoneOffset.inMinutes.toString();
+    if (caption != null && caption.trim().isNotEmpty) {
+      request.fields['caption'] = caption.trim();
+    }
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+    return await request.send();
+  }
+
+  Future<Map<String, dynamic>> sendImageMessage(File imageFile, {String? caption}) async {
+    var token = await getAccessToken();
+    var response = await http.Response.fromStream(await _sendImageChatRequest(imageFile, caption, token));
+
+    // Same single-retry-after-refresh pattern as _authRequest.
+    if (response.statusCode == 401) {
+      final refreshed = await refreshAccessToken();
+      if (refreshed) {
+        token = await getAccessToken();
+        response = await http.Response.fromStream(await _sendImageChatRequest(imageFile, caption, token));
+      }
+    }
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else if (response.statusCode == 429) {
+      throw Exception('Daily limit reached. Try again tomorrow.');
+    } else if (response.statusCode == 401) {
+      throw Exception('Session expired. Please log in again.');
+    } else {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Failed to send photo');
+    }
+  }
+
+  // ============================================================
   // VOICE PREVIEW — free, short, fixed sample of Ollie's voice.
   // ============================================================
 
@@ -243,7 +298,16 @@ class ApiService {
     } else if (response.statusCode == 429) {
       throw Exception("you've heard enough of him for today — try again tomorrow");
     } else {
-      return null;
+      // Was: silently returning null here, which _playVoicePreview
+      // treats as "nothing to play" with no error shown -- the
+      // request could be failing for any reason (TTS misconfigured,
+      // upstream outage...) and nothing would ever tell the user
+      // why. Throwing surfaces the real backend detail instead.
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not play voice preview');
     }
   }
 

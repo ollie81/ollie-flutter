@@ -32,6 +32,10 @@
 	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Ollie uses your microphone so you can talk instead of type.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Ollie uses your camera so you can show him what's happening.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ollie needs access to your photos so you can share one with him.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
