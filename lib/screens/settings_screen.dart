@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'auth_screen.dart';
+import 'memories_screen.dart';
 import 'paywall_screen.dart';
 import 'privacy_policy_screen.dart';
 
@@ -18,6 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _loading = true;
   bool _notificationsEnabled = true;
+  bool _memoryEnabled = true;
   int _messagesUsedToday = 0;
   int _dailyLimit = 20;
   bool _hasActiveAdBonus = false;
@@ -42,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _hasActiveAdBonus = usage['has_active_ad_bonus'] ?? false;
         _isPremium = usage['is_premium'] ?? false;
         _notificationsEnabled = usage['notifications_enabled'] ?? true;
+        _memoryEnabled = usage['memory_enabled'] ?? true;
         _country = usage['country'];
         _region = usage['region'];
         _district = usage['district'];
@@ -62,6 +65,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       setState(() => _notificationsEnabled = !value);
       _showError('Could not update notification setting');
+    }
+  }
+
+  Future<void> _toggleMemory(bool value) async {
+    setState(() => _memoryEnabled = value);
+    try {
+      await _api.setMemoryEnabled(value);
+    } catch (e) {
+      // revert on failure
+      if (!mounted) return;
+      setState(() => _memoryEnabled = !value);
+      _showError('Could not update memory setting');
     }
   }
 
@@ -342,7 +357,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _showLocationEditDialog,
                 ),
 
-                _sectionLabel('Privacy'),
+                _sectionLabel('Memory'),
+                _switchTile(
+                  Icons.psychology_outlined,
+                  'Let Ollie remember',
+                  _memoryEnabled,
+                  _toggleMemory,
+                ),
+                _actionTile(
+                  Icons.auto_stories_outlined,
+                  'Manage memories',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MemoriesScreen()),
+                  ),
+                ),
                 _actionTile(
                   Icons.refresh,
                   'Clear Ollie\'s memory of you',

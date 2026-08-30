@@ -98,6 +98,12 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       );
+    } else if (method == 'PATCH') {
+      response = await http.patch(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      );
     } else if (method == 'DELETE') {
       response = await http.delete(
         Uri.parse('$baseUrl$endpoint'),
@@ -123,6 +129,12 @@ class ApiService {
           );
         } else if (method == 'PUT') {
           response = await http.put(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: newHeaders,
+            body: body != null ? jsonEncode(body) : null,
+          );
+        } else if (method == 'PATCH') {
+          response = await http.patch(
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
@@ -826,6 +838,79 @@ class ApiService {
       );
     } catch (e) {
       // Ignore
+    }
+  }
+
+  // Individual memory management -- view/edit/delete what Ollie
+  // remembers, and turn memory on/off entirely. All throw on
+  // failure (unlike clearMemory above) so the Memories screen can
+  // show a real error instead of silently pretending it worked.
+
+  Future<List<Map<String, dynamic>>> getMemories() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/settings/memories',
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not load memories');
+    }
+
+    final data = jsonDecode(response.body);
+    return List<Map<String, dynamic>>.from(data['memories'] ?? []);
+  }
+
+  Future<void> updateMemory(String memoryId, {String? memoryText, String? category}) async {
+    final response = await _authRequest(
+      method: 'PATCH',
+      endpoint: '/settings/memories/$memoryId',
+      body: {
+        'memory_text': memoryText,
+        'category': category,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not update memory');
+    }
+  }
+
+  Future<void> deleteMemory(String memoryId) async {
+    final response = await _authRequest(
+      method: 'DELETE',
+      endpoint: '/settings/memories/$memoryId',
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not delete memory');
+    }
+  }
+
+  Future<void> setMemoryEnabled(bool enabled) async {
+    final response = await _authRequest(
+      method: 'PUT',
+      endpoint: '/settings/memory/enabled',
+      body: {'enabled': enabled},
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not update memory setting');
     }
   }
 
