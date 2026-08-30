@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
-import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import 'email_auth_screen.dart';
+import 'phone_auth_screen.dart';
 import 'home_screen.dart';
 
-enum AuthMode { login, signup, forgot }
-
+// Landing screen for signing in -- picks between the three methods,
+// then hands off to a dedicated screen for whichever one has an
+// actual form (email, phone). Google is a single native picker, not
+// a form, so it stays a button right here rather than getting its
+// own screen with nothing else on it.
+//
+// Google and Email are the two prominent options up top since most
+// users already have one or the other; Phone (SMS OTP) is still
+// fully supported, just secondary -- for anyone without email or
+// where phone sign-in is more natural.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -17,60 +25,8 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  AuthMode _mode = AuthMode.login;
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmController = TextEditingController();
-  final TextEditingController _otpController = TextEditingController();
   final ApiService _api = ApiService();
-
-  String _countryCode = '+1';
-  String _fullPhoneNumber = '';
-  late final String _detectedCountryCode = _detectDeviceCountryCode();
-
-  static String _detectDeviceCountryCode() {
-    try {
-      final locale = WidgetsBinding.instance.platformDispatcher.locale;
-      final code = locale.countryCode;
-      if (code != null && code.isNotEmpty) return code;
-    } catch (_) {}
-    return 'US'; // neutral fallback if device locale is unavailable
-  }
-
   bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
-  bool _otpSent = false;
-  bool _signupOtpSent = false;
-  final TextEditingController _signupOtpController = TextEditingController();
-  DateTime? _dateOfBirth;
-
-  static const int _minSignupAgeYears = 13;
-
-  int _calculateAge(DateTime dob) {
-    final now = DateTime.now();
-    int age = now.year - dob.year;
-    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
-      age--;
-    }
-    return age;
-  }
-
-  String _formatDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  Future<void> _pickDateOfBirth() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(now.year - 18, now.month, now.day),
-      firstDate: DateTime(now.year - 100),
-      lastDate: now,
-    );
-    if (picked != null) {
-      setState(() => _dateOfBirth = picked);
-    }
-  }
 
   // Must match the Web client ID your backend (auth.py) verifies
   // Google ID tokens against. Without this, Android issues a token
@@ -78,179 +34,7 @@ class _AuthScreenState extends State<AuthScreen> {
   // id_token.verify_oauth2_token() rejects it with an audience
   // mismatch — Google Sign-In fails even with a correct SHA-1.
   static const String _googleServerClientId =
-    '431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com';
-  // ============================================================
-  // SUBMIT HANDLER
-  // ============================================================
-
-  Future<void> _handleSubmit() async {
-    final phone = _fullPhoneNumber;
-
-    if (phone.isEmpty) {
-      _showError('Enter phone number');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      if (_mode == AuthMode.login) {
-        if (_passwordController.text.isEmpty) {
-          _showError('Enter password');
-          return;
-        }
-        await _api.login(
-          phoneNumber: phone,
-          password: _passwordController.text,
-        );
-        await _saveAndNavigate(phone);
-      } else if (_mode == AuthMode.signup) {
-        if (_passwordController.text.length < 6) {
-          _showError('Password must be at least 6 characters');
-          return;
-        }
-        if (_passwordController.text != _confirmController.text) {
-          _showError('Passwords do not match');
-          return;
-        }
-        if (_dateOfBirth == null) {
-          _showError('Enter your date of birth');
-          return;
-        }
-        if (_calculateAge(_dateOfBirth!) < _minSignupAgeYears) {
-          _showError('You must be at least $_minSignupAgeYears years old to create an account');
-          return;
-        }
-
-        if (!_signupOtpSent) {
-          await _api.requestSignupOtp(phoneNumber: phone);
-          setState(() => _signupOtpSent = true);
-          _showSuccess('OTP sent to your phone');
-        } else {
-          if (_signupOtpController.text.trim().isEmpty) {
-            _showError('Enter the OTP sent to your phone');
-            return;
-          }
-          await _api.signup(
-            phoneNumber: phone,
-            password: _passwordController.text,
-            otp: _signupOtpController.text.trim(),
-            dateOfBirth: _formatDate(_dateOfBirth!),
-          );
-          await _saveAndNavigate(phone);
-        }
-      } else if (_mode == AuthMode.forgot) {
-        if (!_otpSent) {
-          await _api.forgotPassword(phoneNumber: phone);
-          setState(() => _otpSent = true);
-          _showSuccess('OTP sent to your phone');
-        } else {
-          if (_otpController.text.isEmpty) {
-            _showError('Enter the OTP');
-            return;
-          }
-          if (_passwordController.text.length < 6) {
-            _showError('Password must be at least 6 characters');
-            return;
-          }
-          await _api.resetPassword(
-            phoneNumber: phone,
-            otp: _otpController.text.trim(),
-            newPassword: _passwordController.text,
-          );
-          _showSuccess('Password reset! Login with new password.');
-          setState(() {
-            _mode = AuthMode.login;
-            _otpSent = false;
-            _otpController.clear();
-            _passwordController.clear();
-          });
-        }
-      }
-    } catch (e) {
-      _showError(e.toString().replaceAll('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ============================================================
-  // NAVIGATION HELPERS
-  // ============================================================
-
-  // Previously the FCM token was only ever saved on a full app
-  // cold start while already logged in (see main.dart) — meaning a
-  // brand new signup, or anyone who doesn't fully restart the app
-  // after logging in, never got a token registered at all, so
-  // push notifications (including reminders) silently never
-  // arrived. Registering right after a successful login/signup
-  // closes that gap. Never blocks navigation if it fails.
-  Future<void> _registerFcmToken() async {
-    try {
-      final fcmToken = await NotificationService.getFCMToken();
-      if (fcmToken != null) {
-        await _api.saveFcmToken(fcmToken);
-      }
-    } catch (_) {
-      // Best-effort — a failed registration here shouldn't block
-      // the user from getting into the app.
-    }
-  }
-
-  Future<void> _saveAndNavigate(String phone) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('phoneNumber', phone);
-    await prefs.setBool('is_logged_in', true);
-    await _registerFcmToken();
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(phoneNumber: phone),
-        ),
-      );
-    }
-  }
-
-  // ============================================================
-  // SNACKBAR HELPERS
-  // ============================================================
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-        backgroundColor: const Color(0xFFE53935),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-        backgroundColor: const Color(0xFF43A047),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
+      '431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com';
 
   // ============================================================
   // GOOGLE LOGIN
@@ -266,14 +50,9 @@ class _AuthScreenState extends State<AuthScreen> {
       );
 
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return;
 
-      if (googleUser == null) {
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
       if (idToken == null) {
         _showError('Google Sign-In failed: no ID token returned');
@@ -292,9 +71,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => HomeScreen(phoneNumber: googleUser.email),
-          ),
+          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: googleUser.email)),
         );
       }
     } catch (e) {
@@ -302,6 +79,37 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _registerFcmToken() async {
+    try {
+      final fcmToken = await NotificationService.getFCMToken();
+      if (fcmToken != null) {
+        await _api.saveFcmToken(fcmToken);
+      }
+    } catch (_) {
+      // Best-effort — a failed registration here shouldn't block
+      // the user from getting into the app.
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+          ],
+        ),
+        backgroundColor: const Color(0xFFE53935),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   // ============================================================
@@ -332,7 +140,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const SizedBox(height: 40),
-                  // Orb
                   Container(
                     width: 90,
                     height: 90,
@@ -349,381 +156,83 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ],
                     ),
-                    child: const Center(
-                      child: Text('🙂', style: TextStyle(fontSize: 44)),
-                    ),
+                    child: const Center(child: Text('🙂', style: TextStyle(fontSize: 44))),
                   ),
                   const SizedBox(height: 28),
-
-                  // Title
-                  Text(
-                    _mode == AuthMode.login
-                        ? 'Welcome Back'
-                        : (_mode == AuthMode.signup
-                            ? 'Create Account'
-                            : 'Reset Password'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const Text(
+                    'Welcome to Ollie',
+                    style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _mode == AuthMode.login
-                        ? 'Sign in to continue'
-                        : (_mode == AuthMode.signup
-                            ? 'Join Ollie today'
-                            : 'Enter your phone number'),
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 14,
+                    'Sign in to continue',
+                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+                  ),
+                  const SizedBox(height: 44),
+
+                  // Google -- prominent, most users have one.
+                  _primaryButton(
+                    label: 'Continue with Google',
+                    icon: Image.network(
+                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                      height: 22,
+                      width: 22,
+                    ),
+                    onTap: _handleGoogleLogin,
+                    filled: false,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Email -- prominent, the other option most people
+                  // already expect to be able to use.
+                  _primaryButton(
+                    label: 'Continue with Email',
+                    icon: const Icon(Icons.email_outlined, color: Colors.white, size: 20),
+                    onTap: _isLoading
+                        ? null
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                            ),
+                    filled: true,
+                  ),
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.white.withOpacity(0.15), thickness: 1)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('or', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+                      ),
+                      Expanded(child: Divider(color: Colors.white.withOpacity(0.15), thickness: 1)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Phone -- secondary, still fully supported.
+                  TextButton.icon(
+                    onPressed: _isLoading
+                        ? null
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                            ),
+                    icon: Icon(Icons.phone_android, color: Colors.white.withOpacity(0.6), size: 18),
+                    label: Text(
+                      'Continue with phone number',
+                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                   ),
-                  const SizedBox(height: 36),
 
-                  // Phone Field with Country Picker
-                  IntlPhoneField(
-                    controller: _phoneController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter phone number',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.07),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(
-                          color: Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(
-                          color: Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: Color(0xFFFF8C6B),
-                          width: 2,
-                        ),
-                      ),
-                      prefixIcon: Icon(
-                        Icons.phone_android,
-                        color: const Color(0xFFFF8C6B).withOpacity(0.7),
-                        size: 20,
-                      ),
+                  if (_isLoading) ...[
+                    const SizedBox(height: 20),
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                     ),
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                    dropdownIconPosition: IconPosition.trailing,
-                    dropdownIcon: Icon(
-                      Icons.arrow_drop_down,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
-                    flagsButtonPadding: const EdgeInsets.all(8),
-                    onChanged: (PhoneNumber number) {
-                      setState(() {
-                        _countryCode = number.countryCode;
-                        _fullPhoneNumber = number.completeNumber;
-                      });
-                    },
-                    onCountryChanged: (country) {
-                      setState(() {
-                        _countryCode = country.dialCode;
-                      });
-                    },
-                    initialCountryCode: _detectedCountryCode,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Password Field
-                  if (_mode != AuthMode.forgot || (_mode == AuthMode.forgot && _otpSent)) ...[
-                    _buildTextField(
-                      controller: _passwordController,
-                      hint: _mode == AuthMode.forgot ? 'New password' : 'Password',
-                      icon: Icons.lock,
-                      obscure: _obscurePassword,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.white.withOpacity(0.3),
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
                   ],
-
-                  // Confirm Password (signup only)
-                  if (_mode == AuthMode.signup) ...[
-                    _buildTextField(
-                      controller: _confirmController,
-                      hint: 'Confirm password',
-                      icon: Icons.lock_outline,
-                      obscure: _obscureConfirm,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.white.withOpacity(0.3),
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Date of birth (signup only)
-                  if (_mode == AuthMode.signup) ...[
-                    GestureDetector(
-                      onTap: _isLoading ? null : _pickDateOfBirth,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.white.withOpacity(0.07),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.cake_outlined,
-                              color: const Color(0xFFFF8C6B).withOpacity(0.7),
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              _dateOfBirth == null
-                                  ? 'Date of birth'
-                                  : _formatDate(_dateOfBirth!),
-                              style: TextStyle(
-                                color: _dateOfBirth == null
-                                    ? Colors.white.withOpacity(0.3)
-                                    : Colors.white,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Signup OTP field
-                  if (_mode == AuthMode.signup && _signupOtpSent) ...[
-                    _buildTextField(
-                      controller: _signupOtpController,
-                      hint: 'Enter the code sent to your phone',
-                      icon: Icons.pin,
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // OTP Field for forgot password
-                  if (_mode == AuthMode.forgot && _otpSent) ...[
-                    _buildTextField(
-                      controller: _otpController,
-                      hint: 'Enter OTP',
-                      icon: Icons.pin,
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Submit Button
-                  GestureDetector(
-                    onTap: _isLoading ? null : _handleSubmit,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 17),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        gradient: LinearGradient(
-                          colors: _isLoading
-                              ? [
-                                  const Color(0xFFFF8C6B).withOpacity(0.5),
-                                  const Color(0xFFE86B4A).withOpacity(0.5),
-                                ]
-                              : const [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF8C6B).withOpacity(0.4),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: _isLoading
-                          ? const Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            )
-                          : Text(
-                              _mode == AuthMode.login
-                                  ? 'Sign In'
-                                  : (_mode == AuthMode.signup
-                                      ? (_signupOtpSent ? 'Verify & Create Account' : 'Send OTP')
-                                      : (_otpSent ? 'Reset Password' : 'Send OTP')),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // DIVIDER + GOOGLE BUTTON
-                  if (_mode != AuthMode.forgot) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: Colors.white.withOpacity(0.15),
-                            thickness: 1,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'or continue with',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.3),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: Colors.white.withOpacity(0.15),
-                            thickness: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Google Sign-In Button
-                    GestureDetector(
-                      onTap: _isLoading ? null : _handleGoogleLogin,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(28),
-                          color: Colors.white.withOpacity(0.07),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.network(
-                              'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                              height: 24,
-                              width: 24,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              _mode == AuthMode.login
-                                  ? 'Sign in with Google'
-                                  : 'Sign up with Google',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Switch login/signup
-                  if (_mode != AuthMode.forgot)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _mode == AuthMode.login
-                              ? "Don't have an account?"
-                              : "Already have an account?",
-                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _mode = _mode == AuthMode.login
-                                  ? AuthMode.signup
-                                  : AuthMode.login;
-                              _passwordController.clear();
-                              _confirmController.clear();
-                              _signupOtpSent = false;
-                              _signupOtpController.clear();
-                              _dateOfBirth = null;
-                            });
-                          },
-                          child: Text(
-                            _mode == AuthMode.login ? 'Sign Up' : 'Sign In',
-                            style: const TextStyle(
-                              color: Color(0xFFFF8C6B),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                  // Forgot password link
-                  if (_mode == AuthMode.login)
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _mode = AuthMode.forgot;
-                          _otpSent = false;
-                          _otpController.clear();
-                          _passwordController.clear();
-                        });
-                      },
-                      child: Text(
-                        'Forgot password?',
-                        style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                      ),
-                    ),
-
-                  // Back to login
-                  if (_mode == AuthMode.forgot)
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _mode = AuthMode.login;
-                          _otpSent = false;
-                          _otpController.clear();
-                          _passwordController.clear();
-                        });
-                      },
-                      child: Text(
-                        'Back to Login',
-                        style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                      ),
-                    ),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -734,36 +243,52 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    bool obscure = false,
-    Widget? suffixIcon,
-    TextInputType keyboardType = TextInputType.text,
+  Widget _primaryButton({
+    required String label,
+    required Widget icon,
+    required VoidCallback? onTap,
+    required bool filled,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white.withOpacity(0.07),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white, fontSize: 15),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-          prefixIcon: Icon(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: filled
+              ? LinearGradient(
+                  colors: _isLoading
+                      ? [const Color(0xFFFF8C6B).withOpacity(0.5), const Color(0xFFE86B4A).withOpacity(0.5)]
+                      : const [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                )
+              : null,
+          color: filled ? null : Colors.white.withOpacity(0.07),
+          border: filled ? null : Border.all(color: Colors.white.withOpacity(0.15)),
+          boxShadow: filled
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFFF8C6B).withOpacity(0.4),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             icon,
-            color: const Color(0xFFFF8C6B).withOpacity(0.7),
-            size: 20,
-          ),
-          suffixIcon: suffixIcon,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                color: filled ? Colors.white : Colors.white.withOpacity(0.9),
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ],
         ),
       ),
     );
