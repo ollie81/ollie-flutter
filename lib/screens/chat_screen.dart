@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -11,6 +12,17 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
 import 'paywall_screen.dart';
 import 'notifications_screen.dart';
+import 'chat_search_screen.dart';
+
+// The message an earlier bubble is quoting, shown as a small
+// preview inside it -- resolved server-side (see /history), so it
+// still renders even when the original message is outside whatever
+// page of history is currently loaded.
+class ReplyPreview {
+  final String sender;
+  final String text;
+  const ReplyPreview({required this.sender, required this.text});
+}
 
 class ChatMessage {
   final String text;
@@ -21,7 +33,20 @@ class ChatMessage {
   // as voice messages only keeping the transcript), so it won't
   // reappear after a reload from history.
   final File? imageFile;
-  ChatMessage({required this.text, required this.isOllie, required this.time, this.imageFile});
+  // Server-assigned once the save round-trips -- null for the brief
+  // window between an optimistically-shown bubble and its response
+  // (see _sendMessage). Reply/search-jump are unavailable on a
+  // message until this is set; copy never needs it.
+  String? id;
+  final ReplyPreview? replyTo;
+  ChatMessage({
+    required this.text,
+    required this.isOllie,
+    required this.time,
+    this.imageFile,
+    this.id,
+    this.replyTo,
+  });
 }
 
 class ChatScreen extends StatefulWidget {
@@ -57,9 +82,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final ImagePicker _imagePicker = ImagePicker();
 
   List<ChatMessage> _messages = [];
+  // Set while composing a reply; cleared on send or cancel. Search-
+  // jump highlight and per-bubble scroll targets (see
+  // _scrollToMessage) are separate, keyed by message id.
+  ChatMessage? _replyingTo;
+  String? _highlightedMessageId;
+  final Map<String, GlobalKey> _messageKeys = {};
   bool _isTyping = false;
   bool _isListening = false; // true while actively recording a voice message
-  bool _isTranscribing = false; // true while a recorded message is uploading/processing
+  bool _isTranscribing =
+      false; // true while a recorded message is uploading/processing
   bool _recorderInitialized = false;
   DateTime? _recordingStartedAt;
   String _emotionalHeader = "hey there 😊";
@@ -120,7 +152,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (mounted && streak is int) setState(() => _currentStreak = streak);
 
       final remaining = usage['voice_trial_seconds_remaining'];
-      if (mounted && remaining is int) setState(() => _voiceTrialSecondsRemaining = remaining);
+      if (mounted && remaining is int)
+        setState(() => _voiceTrialSecondsRemaining = remaining);
 
       final isPremium = usage['is_premium'];
       if (mounted && isPremium is bool) setState(() => _isPremium = isPremium);
@@ -157,7 +190,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // Absent for premium users (unlimited, nothing to count) --
     // same convention as sendVoiceMessage's header-based version.
     final remaining = response['voice_trial_seconds_remaining'];
-    if (remaining is int) setState(() => _voiceTrialSecondsRemaining = remaining);
+    if (remaining is int)
+      setState(() => _voiceTrialSecondsRemaining = remaining);
   }
 
   Future<void> _loadHistory() async {
@@ -166,10 +200,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (!mounted || history.isEmpty) return;
       setState(() {
         _messages = history.map((msg) {
+          final replyToJson = msg['reply_to'];
           return ChatMessage(
             text: msg['message'] ?? '',
             isOllie: msg['sender'] == 'ollie',
             time: DateTime.tryParse(msg['created_at'] ?? '') ?? DateTime.now(),
+            id: msg['id'] as String?,
+            replyTo: replyToJson != null
+                ? ReplyPreview(
+                    sender: replyToJson['sender'] ?? '',
+                    text: replyToJson['message'] ?? '',
+                  )
+                : null,
           );
         }).toList();
       });
@@ -207,7 +249,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _isTyping = false;
-        _messages.add(ChatMessage(text: greeting, isOllie: true, time: DateTime.now()));
+        _messages.add(
+          ChatMessage(text: greeting, isOllie: true, time: DateTime.now()),
+        );
       });
       _updateEmotionalHeader(greeting);
       _scrollToBottom();
@@ -227,7 +271,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _isTyping = false;
-        _messages.add(ChatMessage(text: opener, isOllie: true, time: DateTime.now()));
+        _messages.add(
+          ChatMessage(text: opener, isOllie: true, time: DateTime.now()),
+        );
       });
       _updateEmotionalHeader(opener);
       _scrollToBottom();
@@ -255,7 +301,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     )..repeat();
 
     _gradientAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _gradientAnimationController, curve: Curves.linear),
+      CurvedAnimation(
+        parent: _gradientAnimationController,
+        curve: Curves.linear,
+      ),
     );
 
     _waveAnimationController = AnimationController(
@@ -288,9 +337,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _updateEmotionalHeader(String message) {
-    if (message.contains("sad") || message.contains("bad") || message.contains("cry")) {
+    if (message.contains("sad") ||
+        message.contains("bad") ||
+        message.contains("cry")) {
       setState(() => _emotionalHeader = "im here 🤗");
-    } else if (message.contains("happy") || message.contains("good") || message.contains("great")) {
+    } else if (message.contains("happy") ||
+        message.contains("good") ||
+        message.contains("great")) {
       setState(() => _emotionalHeader = "let's gooo 🎉");
     } else if (message.contains("love") || message.contains("crush")) {
       setState(() => _emotionalHeader = "awww 💕");
@@ -315,24 +368,55 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final userMessage = _controller.text.trim();
     _updateEmotionalHeader(userMessage);
     _controller.clear();
+    final replyTarget = _replyingTo;
+    _cancelReply();
 
+    final sentMessage = ChatMessage(
+      text: userMessage,
+      isOllie: false,
+      time: DateTime.now(),
+      replyTo: replyTarget != null
+          ? ReplyPreview(
+              sender: replyTarget.isOllie ? 'ollie' : 'user',
+              text: replyTarget.text,
+            )
+          : null,
+    );
     setState(() {
-      _messages.add(ChatMessage(text: userMessage, isOllie: false, time: DateTime.now()));
+      _messages.add(sentMessage);
       _isTyping = true;
     });
     _scrollToBottom();
 
-    await _requestOllieReply(userMessage);
+    await _requestOllieReply(
+      userMessage,
+      sentMessage: sentMessage,
+      replyToId: replyTarget?.id,
+    );
   }
 
-  Future<void> _requestOllieReply(String userMessage) async {
+  Future<void> _requestOllieReply(
+    String userMessage, {
+    ChatMessage? sentMessage,
+    String? replyToId,
+  }) async {
     try {
-      final response = await _api.sendMessage(message: userMessage, mode: _activeMode);
+      final response = await _api.sendMessage(
+        message: userMessage,
+        mode: _activeMode,
+        replyToId: replyToId,
+      );
 
       setState(() => _isTyping = false);
       _updateEmotionalHeader(response['reply']);
 
-      final ollieMessage = ChatMessage(text: response['reply'], isOllie: true, time: DateTime.now());
+      sentMessage?.id = response['user_message_id'] as String?;
+      final ollieMessage = ChatMessage(
+        text: response['reply'],
+        isOllie: true,
+        time: DateTime.now(),
+        id: response['message_id'] as String?,
+      );
       setState(() {
         _messages.add(ollieMessage);
       });
@@ -348,6 +432,122 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _showError(e.toString());
       }
     }
+  }
+
+  // ============================================================
+  // MESSAGE ACTIONS — reply, copy, and jumping to a message found
+  // via search. Reply needs a real id (nothing to attach reply_to_id
+  // to before the save round-trips -- see ChatMessage.id); copy
+  // never does, it only ever touches local text.
+  // ============================================================
+
+  void _startReply(ChatMessage message) {
+    if (message.id == null) return;
+    setState(() => _replyingTo = message);
+  }
+
+  void _cancelReply() {
+    if (_replyingTo == null) return;
+    setState(() => _replyingTo = null);
+  }
+
+  Future<void> _copyMessage(ChatMessage message) async {
+    await Clipboard.setData(ClipboardData(text: message.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Copied to clipboard'),
+        backgroundColor: const Color(0xFF1A1035),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showMessageActions(ChatMessage message) {
+    final canReply = message.id != null;
+    final canCopy = message.text.trim().isNotEmpty;
+    if (!canReply && !canCopy) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                if (canReply)
+                  _buildAttachmentOption(
+                    icon: Icons.reply_rounded,
+                    label: 'Reply',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _startReply(message);
+                    },
+                  ),
+                if (canReply && canCopy) const SizedBox(height: 10),
+                if (canCopy)
+                  _buildAttachmentOption(
+                    icon: Icons.copy_rounded,
+                    label: 'Copy',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _copyMessage(message);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openSearch() async {
+    final targetId = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(builder: (_) => const ChatSearchScreen()),
+    );
+    if (targetId != null) _scrollToMessage(targetId);
+  }
+
+  GlobalKey _keyFor(String id) =>
+      _messageKeys.putIfAbsent(id, () => GlobalKey());
+
+  void _scrollToMessage(String id) {
+    final ctx = _messageKeys[id]?.currentContext;
+    if (ctx == null) {
+      _showError("That message isn't loaded in this chat right now");
+      return;
+    }
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      alignment: 0.5,
+    );
+    setState(() => _highlightedMessageId = id);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && _highlightedMessageId == id)
+        setState(() => _highlightedMessageId = null);
+    });
   }
 
   // ============================================================
@@ -370,7 +570,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _openPaywall() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
+    );
   }
 
   void _showLimitReachedSheet(String pendingMessage) {
@@ -408,7 +611,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               Text(
                 "watch a quick ad for 10 more minutes with ollie",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -537,7 +743,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAttachmentOption({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _buildAttachmentOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -561,7 +771,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               child: Icon(icon, color: const Color(0xFFFF8C6B), size: 20),
             ),
             const SizedBox(width: 14),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -570,11 +787,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _pickAndPreviewImage(ImageSource source) async {
     try {
-      final picked = await _imagePicker.pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
       if (picked == null || !mounted) return;
       _showImagePreviewSheet(File(picked.path));
     } catch (e) {
-      _showError('Could not access ${source == ImageSource.camera ? 'the camera' : 'your photos'}');
+      _showError(
+        'Could not access ${source == ImageSource.camera ? 'the camera' : 'your photos'}',
+      );
     }
   }
 
@@ -589,7 +812,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ),
       builder: (context) {
         return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: SafeArea(
             top: false,
             child: Padding(
@@ -627,9 +852,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         hintText: 'Add a caption (optional)',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.35),
+                        ),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 14,
+                        ),
                       ),
                     ),
                   ),
@@ -640,7 +870,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFFF8C6B),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
                       ),
                       onPressed: () {
                         Navigator.pop(context);
@@ -648,7 +880,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       },
                       child: const Text(
                         'Send to Ollie',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -665,22 +900,31 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (_isTyping) return;
     final trimmedCaption = caption?.trim();
 
+    final sentMessage = ChatMessage(
+      text: trimmedCaption ?? '',
+      isOllie: false,
+      time: DateTime.now(),
+      imageFile: imageFile,
+    );
     setState(() {
-      _messages.add(ChatMessage(
-        text: trimmedCaption ?? '',
-        isOllie: false,
-        time: DateTime.now(),
-        imageFile: imageFile,
-      ));
+      _messages.add(sentMessage);
     });
     if (trimmedCaption != null && trimmedCaption.isNotEmpty) {
       _updateEmotionalHeader(trimmedCaption);
     }
     _scrollToBottom();
-    await _requestImageReaction(imageFile, trimmedCaption);
+    await _requestImageReaction(
+      imageFile,
+      trimmedCaption,
+      sentMessage: sentMessage,
+    );
   }
 
-  Future<void> _requestImageReaction(File imageFile, String? caption) async {
+  Future<void> _requestImageReaction(
+    File imageFile,
+    String? caption, {
+    ChatMessage? sentMessage,
+  }) async {
     setState(() => _isTyping = true);
     try {
       final response = await _api.sendImageMessage(imageFile, caption: caption);
@@ -692,7 +936,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         return;
       }
 
-      final ollieMessage = ChatMessage(text: reply, isOllie: true, time: DateTime.now());
+      sentMessage?.id = response['user_message_id'] as String?;
+      final ollieMessage = ChatMessage(
+        text: reply,
+        isOllie: true,
+        time: DateTime.now(),
+        id: response['message_id'] as String?,
+      );
       setState(() => _messages.add(ollieMessage));
       _applyStreak(response);
       _updateEmotionalHeader(reply);
@@ -733,13 +983,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               const Text(
                 "you're out of free messages for today",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 "watch a quick ad for 10 more minutes with ollie",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -748,7 +1005,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF8C6B),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.pop(context);
@@ -756,7 +1015,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   },
                   child: const Text(
                     'watch ad for 10 more minutes',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -817,7 +1079,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     try {
       final result = await _api.sendVoiceMessage(message: message.text);
       if (result.voiceTrialSecondsRemaining != null && mounted) {
-        setState(() => _voiceTrialSecondsRemaining = result.voiceTrialSecondsRemaining);
+        setState(
+          () => _voiceTrialSecondsRemaining = result.voiceTrialSecondsRemaining,
+        );
       }
       if (result.file != null) {
         _startPlaybackTimer(message);
@@ -891,7 +1155,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final path = '${tempDir.path}/ollie_voice_message_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path =
+          '${tempDir.path}/ollie_voice_message_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.startRecorder(
         toFile: path,
         codec: Codec.aacMP4,
@@ -923,7 +1188,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     // Ignore accidental taps -- anything under half a second isn't
     // a real voice message.
-    if (path == null || startedAt == null || DateTime.now().difference(startedAt) < const Duration(milliseconds: 500)) {
+    if (path == null ||
+        startedAt == null ||
+        DateTime.now().difference(startedAt) <
+            const Duration(milliseconds: 500)) {
       return;
     }
 
@@ -940,9 +1208,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
 
       _updateEmotionalHeader(transcribed);
-      final ollieMessage = ChatMessage(text: reply, isOllie: true, time: DateTime.now());
+      final ollieMessage = ChatMessage(
+        text: reply,
+        isOllie: true,
+        time: DateTime.now(),
+        id: response['message_id'] as String?,
+      );
       setState(() {
-        _messages.add(ChatMessage(text: transcribed, isOllie: false, time: DateTime.now()));
+        _messages.add(
+          ChatMessage(
+            text: transcribed,
+            isOllie: false,
+            time: DateTime.now(),
+            id: response['user_message_id'] as String?,
+          ),
+        );
         _messages.add(ollieMessage);
       });
       _applyStreak(response);
@@ -1011,13 +1291,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               const Text(
                 "talking with ollie is a premium thing",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 "go premium to talk to ollie and hear him talk back, anytime",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -1026,7 +1313,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF8C6B),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.pop(context);
@@ -1034,7 +1323,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   },
                   child: const Text(
                     'go premium',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -1071,7 +1363,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             animation: _particleController,
             builder: (context, child) {
               return CustomPaint(
-                painter: ParticlePainter(particles: _particles, time: _particleController.value),
+                painter: ParticlePainter(
+                  particles: _particles,
+                  time: _particleController.value,
+                ),
                 size: Size.infinite,
               );
             },
@@ -1085,8 +1380,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color.lerp(const Color(0xFF0D0F1A), const Color(0xFF1A1035), _gradientAnimation.value)!,
-                      Color.lerp(const Color(0xFF151829), const Color(0xFF2D1B4E), _gradientAnimation.value)!,
+                      Color.lerp(
+                        const Color(0xFF0D0F1A),
+                        const Color(0xFF1A1035),
+                        _gradientAnimation.value,
+                      )!,
+                      Color.lerp(
+                        const Color(0xFF151829),
+                        const Color(0xFF2D1B4E),
+                        _gradientAnimation.value,
+                      )!,
                       const Color(0xFF1A1035),
                     ],
                   ),
@@ -1141,7 +1444,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ],
                   ),
                   child: const Center(
-                    child: Text('O', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      'O',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -1151,13 +1461,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Ollie', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              const Text(
+                'Ollie',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               Text(
                 widget.initialModeLabel ?? 'always here',
                 style: TextStyle(
-                  color: widget.initialModeLabel != null ? const Color(0xFFFF8C6B) : Colors.grey,
+                  color: widget.initialModeLabel != null
+                      ? const Color(0xFFFF8C6B)
+                      : Colors.grey,
                   fontSize: 12,
-                  fontWeight: widget.initialModeLabel != null ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: widget.initialModeLabel != null
+                      ? FontWeight.w600
+                      : FontWeight.normal,
                 ),
               ),
             ],
@@ -1167,6 +1488,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             _buildStreakBadge(),
             const SizedBox(width: 4),
           ],
+          IconButton(
+            icon: const Icon(Icons.search_rounded, color: Colors.white),
+            onPressed: _openSearch,
+          ),
           _buildNotificationBell(),
         ],
       ),
@@ -1178,7 +1503,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       clipBehavior: Clip.none,
       children: [
         IconButton(
-          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+          icon: const Icon(
+            Icons.notifications_none_rounded,
+            color: Colors.white,
+          ),
           onPressed: _openNotifications,
         ),
         if (_unreadNotifications > 0)
@@ -1195,7 +1523,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               child: Text(
                 _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -1218,7 +1550,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           const SizedBox(width: 4),
           Text(
             '$_currentStreak',
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1254,7 +1590,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             child: Text(
               _emotionalHeader,
               key: ValueKey(_emotionalHeader),
-              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -1282,7 +1622,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             color: const Color(0xFFFF8C6B).withOpacity(0.15),
             border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
           ),
-          child: const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 14),
+          child: const Icon(
+            Icons.volume_up_rounded,
+            color: Color(0xFFFF8C6B),
+            size: 14,
+          ),
         ),
       );
     }
@@ -1300,11 +1644,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.graphic_eq_rounded, color: Color(0xFFFF8C6B), size: 14),
+          const Icon(
+            Icons.graphic_eq_rounded,
+            color: Color(0xFFFF8C6B),
+            size: 14,
+          ),
           const SizedBox(width: 6),
           Text(
             '${_formatElapsed(_playingElapsedSeconds)}$trialSuffix',
-            style: const TextStyle(color: Color(0xFFFF8C6B), fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Color(0xFFFF8C6B),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1323,19 +1675,28 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final message = _messages[index];
         final hasImage = message.imageFile != null;
         final hasCaption = message.text.trim().isNotEmpty;
+        final isHighlighted =
+            message.id != null && message.id == _highlightedMessageId;
         final bubbleRadius = BorderRadius.only(
           topLeft: const Radius.circular(20),
           topRight: const Radius.circular(20),
-          bottomLeft: message.isOllie ? const Radius.circular(4) : const Radius.circular(20),
-          bottomRight: message.isOllie ? const Radius.circular(20) : const Radius.circular(4),
+          bottomLeft: message.isOllie
+              ? const Radius.circular(4)
+              : const Radius.circular(20),
+          bottomRight: message.isOllie
+              ? const Radius.circular(20)
+              : const Radius.circular(4),
         );
         return AnimatedOpacity(
+          key: message.id != null ? _keyFor(message.id!) : null,
           opacity: 1,
           duration: const Duration(milliseconds: 400),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
-              mainAxisAlignment: message.isOllie ? MainAxisAlignment.start : MainAxisAlignment.end,
+              mainAxisAlignment: message.isOllie
+                  ? MainAxisAlignment.start
+                  : MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 // Ollie avatar
@@ -1345,76 +1706,125 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     height: 32,
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                      ),
                     ),
-                    child: const Center(child: Text('O', style: TextStyle(color: Colors.white, fontSize: 13))),
+                    child: const Center(
+                      child: Text(
+                        'O',
+                        style: TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                 ],
                 // Message bubble
                 Flexible(
-                  child: Container(
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (hasImage ? 0.68 : 0.7)),
-                    padding: hasImage
-                        ? EdgeInsets.zero
-                        : const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    decoration: BoxDecoration(
-                      borderRadius: bubbleRadius,
-                      gradient: message.isOllie
-                          ? LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.12),
-                                Colors.white.withOpacity(0.06),
-                              ],
-                            )
-                          : const LinearGradient(
-                              colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                  child: GestureDetector(
+                    onLongPress: () => _showMessageActions(message),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      constraints: BoxConstraints(
+                        maxWidth:
+                            MediaQuery.of(context).size.width *
+                            (hasImage ? 0.68 : 0.7),
+                      ),
+                      padding: hasImage
+                          ? EdgeInsets.zero
+                          : const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
                             ),
-                      border: message.isOllie
-                          ? Border.all(color: Colors.white.withOpacity(0.08))
-                          : null,
-                      boxShadow: [
-                        BoxShadow(
-                          color: message.isOllie
-                              ? Colors.black.withOpacity(0.1)
-                              : const Color(0xFFFF8C6B).withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: hasImage
-                        ? ClipRRect(
-                            borderRadius: bubbleRadius,
-                            child: Column(
+                      decoration: BoxDecoration(
+                        borderRadius: bubbleRadius,
+                        gradient: message.isOllie
+                            ? LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white.withOpacity(0.12),
+                                  Colors.white.withOpacity(0.06),
+                                ],
+                              )
+                            : const LinearGradient(
+                                colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                              ),
+                        border: isHighlighted
+                            ? Border.all(
+                                color: const Color(0xFFFF8C6B),
+                                width: 2,
+                              )
+                            : (message.isOllie
+                                  ? Border.all(
+                                      color: Colors.white.withOpacity(0.08),
+                                    )
+                                  : null),
+                        boxShadow: [
+                          BoxShadow(
+                            color: message.isOllie
+                                ? Colors.black.withOpacity(0.1)
+                                : const Color(0xFFFF8C6B).withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: hasImage
+                          ? ClipRRect(
+                              borderRadius: bubbleRadius,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxHeight: 260,
+                                    ),
+                                    child: Image.file(
+                                      message.imageFile!,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                    ),
+                                  ),
+                                  if (hasCaption)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      child: Text(
+                                        message.text,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            )
+                          : Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxHeight: 260),
-                                  child: Image.file(
-                                    message.imageFile!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
+                                if (message.replyTo != null)
+                                  _buildReplyQuote(message.replyTo!),
+                                Text(
+                                  message.text.replaceAll(
+                                    RegExp(r'\n{2,}'),
+                                    '\n',
+                                  ),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    height: 1.4,
                                   ),
                                 ),
-                                if (hasCaption)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    child: Text(
-                                      message.text,
-                                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
-                                    ),
-                                  ),
                               ],
                             ),
-                          )
-                        : Text(
-                            message.text.replaceAll(RegExp(r'\n{2,}'), '\n'),
-                            style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
-                          ),
+                    ),
                   ),
                 ),
                 // Speaker only on Ollie messages
@@ -1427,6 +1837,30 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildReplyQuote(ReplyPreview reply) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(color: Colors.white.withOpacity(0.4), width: 3),
+        ),
+      ),
+      child: Text(
+        reply.text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.7),
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
     );
   }
 
@@ -1455,7 +1889,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: const LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: const Color(0xFFFF8C6B).withOpacity(0.6),
@@ -1472,7 +1908,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           const SizedBox(height: 24),
           const Text(
             'hey there 😊',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -1486,9 +1926,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C6B)),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFFF8C6B),
+                    ),
                   )
-                : const Icon(Icons.volume_up_rounded, color: Color(0xFFFF8C6B), size: 18),
+                : const Icon(
+                    Icons.volume_up_rounded,
+                    color: Color(0xFFFF8C6B),
+                    size: 18,
+                  ),
             label: Text(
               "hear what ollie sounds like",
               style: TextStyle(color: Colors.white.withOpacity(0.7)),
@@ -1509,9 +1956,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             height: 32,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
+              gradient: LinearGradient(
+                colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+              ),
             ),
-            child: const Center(child: Text('O', style: TextStyle(color: Colors.white, fontSize: 13))),
+            child: const Center(
+              child: Text(
+                'O',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Container(
@@ -1578,98 +2032,176 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
         ),
       ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_replyingTo != null) _buildReplyingToBar(),
+          Row(
+            children: [
+              // Share a photo with Ollie.
+              GestureDetector(
+                onTap: _showAttachmentSheet,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.07),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: Icon(
+                    Icons.camera_alt_rounded,
+                    color: Colors.white.withOpacity(0.7),
+                    size: 20,
+                  ),
+                ),
+              ),
+              // Hold to record a voice message, release to send.
+              GestureDetector(
+                onLongPressStart: (_) => _startRecording(),
+                onLongPressEnd: (_) => _stopRecordingAndSend(),
+                onLongPressCancel: () => _stopRecordingAndSend(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 48,
+                  height: 48,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isListening
+                        ? const Color(0xFFE53935).withOpacity(0.25)
+                        : Colors.white.withOpacity(0.07),
+                    border: Border.all(
+                      color: _isListening
+                          ? const Color(0xFFE53935)
+                          : Colors.white.withOpacity(0.1),
+                    ),
+                  ),
+                  child: _isTranscribing
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFFF8C6B),
+                          ),
+                        )
+                      : Icon(
+                          _isListening
+                              ? Icons.mic_rounded
+                              : Icons.mic_none_rounded,
+                          color: _isListening
+                              ? const Color(0xFFE53935)
+                              : Colors.white.withOpacity(0.7),
+                          size: 22,
+                        ),
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: Colors.white.withOpacity(0.07),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    style: const TextStyle(color: Colors.white),
+                    maxLines: null,
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: _sendMessage,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF8C6B).withOpacity(0.4),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.send_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReplyingToBar() {
+    final target = _replyingTo!;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border(
+          left: BorderSide(color: const Color(0xFFFF8C6B), width: 3),
+        ),
+      ),
       child: Row(
         children: [
-          // Share a photo with Ollie.
-          GestureDetector(
-            onTap: _showAttachmentSheet,
-            child: Container(
-              width: 44,
-              height: 44,
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.07),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: Icon(Icons.camera_alt_rounded, color: Colors.white.withOpacity(0.7), size: 20),
-            ),
-          ),
-          // Hold to record a voice message, release to send.
-          GestureDetector(
-            onLongPressStart: (_) => _startRecording(),
-            onLongPressEnd: (_) => _stopRecordingAndSend(),
-            onLongPressCancel: () => _stopRecordingAndSend(),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 48,
-              height: 48,
-              margin: const EdgeInsets.only(right: 10),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _isListening
-                    ? const Color(0xFFE53935).withOpacity(0.25)
-                    : Colors.white.withOpacity(0.07),
-                border: Border.all(
-                  color: _isListening
-                      ? const Color(0xFFE53935)
-                      : Colors.white.withOpacity(0.1),
-                ),
-              ),
-              child: _isTranscribing
-                  ? const Padding(
-                      padding: EdgeInsets.all(14),
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8C6B)),
-                    )
-                  : Icon(
-                      _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
-                      color: _isListening ? const Color(0xFFE53935) : Colors.white.withOpacity(0.7),
-                      size: 22,
-                    ),
-            ),
-          ),
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                color: Colors.white.withOpacity(0.07),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: TextField(
-                controller: _controller,
-                style: const TextStyle(color: Colors.white),
-                maxLines: null,
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  target.isOllie ? 'Replying to Ollie' : 'Replying to yourself',
+                  style: const TextStyle(
+                    color: Color(0xFFFF8C6B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                onSubmitted: (_) => _sendMessage(),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  target.text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
           GestureDetector(
-            onTap: _sendMessage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF8C6B).withOpacity(0.4),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+            onTap: _cancelReply,
+            child: Icon(
+              Icons.close_rounded,
+              color: Colors.white.withOpacity(0.5),
+              size: 18,
             ),
           ),
         ],

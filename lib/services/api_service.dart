@@ -185,6 +185,7 @@ class ApiService {
     required String message,
     List<Map<String, String>> history = const [],
     String? mode,
+    String? replyToId,
   }) async {
     final response = await _authRequest(
       method: 'POST',
@@ -194,6 +195,7 @@ class ApiService {
         'history': history,
         'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
         if (mode != null) 'mode': mode,
+        if (replyToId != null) 'reply_to_id': replyToId,
       },
     );
 
@@ -220,11 +222,16 @@ class ApiService {
     if (response.statusCode == 200) {
       final tempDir = await getTemporaryDirectory();
       final file = File(
-          '${tempDir.path}/ollie_voice_${DateTime.now().millisecondsSinceEpoch}.mp3');
+        '${tempDir.path}/ollie_voice_${DateTime.now().millisecondsSinceEpoch}.mp3',
+      );
       await file.writeAsBytes(response.bodyBytes);
       // Absent for premium users (unlimited, nothing to count).
-      final remainingHeader = response.headers['x-voice-trial-remaining-seconds'];
-      return (file: file, voiceTrialSecondsRemaining: int.tryParse(remainingHeader ?? ''));
+      final remainingHeader =
+          response.headers['x-voice-trial-remaining-seconds'];
+      return (
+        file: file,
+        voiceTrialSecondsRemaining: int.tryParse(remainingHeader ?? ''),
+      );
     } else if (response.statusCode == 402) {
       throw Exception('Voice replies require Ollie Premium');
     } else {
@@ -249,25 +256,44 @@ class ApiService {
   // in the returned map below) — premium is unlimited.
   // ============================================================
 
-  Future<http.StreamedResponse> _sendVoiceChatRequest(File audioFile, String? token, String? mode) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/voice'));
+  Future<http.StreamedResponse> _sendVoiceChatRequest(
+    File audioFile,
+    String? token,
+    String? mode,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/chat/voice'),
+    );
     request.headers['Authorization'] = 'Bearer $token';
-    request.fields['utc_offset_minutes'] = DateTime.now().timeZoneOffset.inMinutes.toString();
+    request.fields['utc_offset_minutes'] = DateTime.now()
+        .timeZoneOffset
+        .inMinutes
+        .toString();
     if (mode != null) request.fields['mode'] = mode;
-    request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path));
+    request.files.add(
+      await http.MultipartFile.fromPath('audio', audioFile.path),
+    );
     return await request.send();
   }
 
-  Future<Map<String, dynamic>> sendVoiceChat(File audioFile, {String? mode}) async {
+  Future<Map<String, dynamic>> sendVoiceChat(
+    File audioFile, {
+    String? mode,
+  }) async {
     var token = await getAccessToken();
-    var response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token, mode));
+    var response = await http.Response.fromStream(
+      await _sendVoiceChatRequest(audioFile, token, mode),
+    );
 
     // Same single-retry-after-refresh pattern as _authRequest.
     if (response.statusCode == 401) {
       final refreshed = await refreshAccessToken();
       if (refreshed) {
         token = await getAccessToken();
-        response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token, mode));
+        response = await http.Response.fromStream(
+          await _sendVoiceChatRequest(audioFile, token, mode),
+        );
       }
     }
 
@@ -369,18 +395,34 @@ class ApiService {
   // back to application/octet-stream with no contentType given,
   // which the backend correctly rejects as "not an image".
   MediaType _sniffImageMediaType(List<int> bytes) {
-    if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
       return MediaType('image', 'jpeg');
     }
-    if (bytes.length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
       return MediaType('image', 'png');
     }
-    if (bytes.length >= 6 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46) {
       return MediaType('image', 'gif');
     }
     if (bytes.length >= 12 &&
-        bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
-        bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
       return MediaType('image', 'webp');
     }
     // Fall back to jpeg -- by far the most common phone camera/
@@ -389,33 +431,52 @@ class ApiService {
     return MediaType('image', 'jpeg');
   }
 
-  Future<http.StreamedResponse> _sendImageChatRequest(File imageFile, String? caption, String? token) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/image'));
+  Future<http.StreamedResponse> _sendImageChatRequest(
+    File imageFile,
+    String? caption,
+    String? token,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/chat/image'),
+    );
     request.headers['Authorization'] = 'Bearer $token';
-    request.fields['utc_offset_minutes'] = DateTime.now().timeZoneOffset.inMinutes.toString();
+    request.fields['utc_offset_minutes'] = DateTime.now()
+        .timeZoneOffset
+        .inMinutes
+        .toString();
     if (caption != null && caption.trim().isNotEmpty) {
       request.fields['caption'] = caption.trim();
     }
     final bytes = await imageFile.readAsBytes();
-    request.files.add(http.MultipartFile.fromBytes(
-      'image',
-      bytes,
-      filename: 'photo.jpg',
-      contentType: _sniffImageMediaType(bytes),
-    ));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        bytes,
+        filename: 'photo.jpg',
+        contentType: _sniffImageMediaType(bytes),
+      ),
+    );
     return await request.send();
   }
 
-  Future<Map<String, dynamic>> sendImageMessage(File imageFile, {String? caption}) async {
+  Future<Map<String, dynamic>> sendImageMessage(
+    File imageFile, {
+    String? caption,
+  }) async {
     var token = await getAccessToken();
-    var response = await http.Response.fromStream(await _sendImageChatRequest(imageFile, caption, token));
+    var response = await http.Response.fromStream(
+      await _sendImageChatRequest(imageFile, caption, token),
+    );
 
     // Same single-retry-after-refresh pattern as _authRequest.
     if (response.statusCode == 401) {
       final refreshed = await refreshAccessToken();
       if (refreshed) {
         token = await getAccessToken();
-        response = await http.Response.fromStream(await _sendImageChatRequest(imageFile, caption, token));
+        response = await http.Response.fromStream(
+          await _sendImageChatRequest(imageFile, caption, token),
+        );
       }
     }
 
@@ -439,16 +500,22 @@ class ApiService {
   // ============================================================
 
   Future<File?> getVoicePreview() async {
-    final response = await _authRequest(method: 'POST', endpoint: '/speak/preview');
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/speak/preview',
+    );
 
     if (response.statusCode == 200) {
       final tempDir = await getTemporaryDirectory();
       final file = File(
-          '${tempDir.path}/ollie_preview_${DateTime.now().millisecondsSinceEpoch}.mp3');
+        '${tempDir.path}/ollie_preview_${DateTime.now().millisecondsSinceEpoch}.mp3',
+      );
       await file.writeAsBytes(response.bodyBytes);
       return file;
     } else if (response.statusCode == 429) {
-      throw Exception("you've heard enough of him for today — try again tomorrow");
+      throw Exception(
+        "you've heard enough of him for today — try again tomorrow",
+      );
     } else {
       // Was: silently returning null here, which _playVoicePreview
       // treats as "nothing to play" with no error shown -- the
@@ -522,10 +589,7 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'phone_number': phoneNumber,
-        'password': password,
-      }),
+      body: jsonEncode({'phone_number': phoneNumber, 'password': password}),
     );
 
     if (response.statusCode == 200) {
@@ -604,7 +668,9 @@ class ApiService {
   // Same shapes as the phone methods above, against /auth/email/*.
   // ============================================================
 
-  Future<Map<String, dynamic>> emailRequestSignupOtp({required String email}) async {
+  Future<Map<String, dynamic>> emailRequestSignupOtp({
+    required String email,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/email/signup/request-otp'),
       headers: {'Content-Type': 'application/json'},
@@ -638,7 +704,10 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      await saveTokens(accessToken: data['access_token'], refreshToken: data['refresh_token']);
+      await saveTokens(
+        accessToken: data['access_token'],
+        refreshToken: data['refresh_token'],
+      );
       await _storage.write(key: 'phoneNumber', value: email);
       return data;
     } else {
@@ -659,7 +728,10 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      await saveTokens(accessToken: data['access_token'], refreshToken: data['refresh_token']);
+      await saveTokens(
+        accessToken: data['access_token'],
+        refreshToken: data['refresh_token'],
+      );
       await _storage.write(key: 'phoneNumber', value: email);
       return data;
     } else {
@@ -668,7 +740,9 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> emailForgotPassword({required String email}) async {
+  Future<Map<String, dynamic>> emailForgotPassword({
+    required String email,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/email/forgot'),
       headers: {'Content-Type': 'application/json'},
@@ -691,7 +765,11 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/email/reset'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'otp': otp, 'new_password': newPassword}),
+      body: jsonEncode({
+        'email': email,
+        'otp': otp,
+        'new_password': newPassword,
+      }),
     );
 
     if (response.statusCode == 200) {
@@ -719,7 +797,7 @@ class ApiService {
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
       );
-      
+
       // Extract email from ID token
       try {
         final payload = idToken.split('.')[1];
@@ -729,7 +807,7 @@ class ApiService {
           normalized += '=';
         }
         final decoded = jsonDecode(
-          String.fromCharCodes(base64.decode(normalized))
+          String.fromCharCodes(base64.decode(normalized)),
         );
         final email = decoded['email'];
         if (email != null) {
@@ -739,7 +817,7 @@ class ApiService {
         // If we can't extract email, use a placeholder
         await _storage.write(key: 'phoneNumber', value: 'google_user');
       }
-      
+
       return data;
     } else {
       try {
@@ -825,10 +903,7 @@ class ApiService {
     final response = await _authRequest(
       method: 'POST',
       endpoint: '/premium/activate',
-      body: {
-        'purchase_token': purchaseToken,
-        'product_id': productId,
-      },
+      body: {'purchase_token': purchaseToken, 'product_id': productId},
     );
 
     if (response.statusCode == 200) {
@@ -884,10 +959,7 @@ class ApiService {
   // ============================================================
 
   Future<Map<String, dynamic>> getUserProfile() async {
-    final response = await _authRequest(
-      method: 'GET',
-      endpoint: '/auth/me',
-    );
+    final response = await _authRequest(method: 'GET', endpoint: '/auth/me');
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -926,14 +998,25 @@ class ApiService {
   // ============================================================
 
   Future<List<dynamic>> getHistory() async {
-    final response = await _authRequest(
-      method: 'GET',
-      endpoint: '/history',
-    );
+    final response = await _authRequest(method: 'GET', endpoint: '/history');
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return data['messages'] ?? [];
+    } else {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> searchChat(String query) async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/chat/search?q=${Uri.encodeQueryComponent(query)}',
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['results'] ?? [];
     } else {
       return [];
     }
@@ -1013,7 +1096,9 @@ class ApiService {
       try {
         error = jsonDecode(response.body);
       } catch (_) {}
-      throw Exception(error['detail'] ?? 'Could not update notification frequency');
+      throw Exception(
+        error['detail'] ?? 'Could not update notification frequency',
+      );
     }
   }
 
@@ -1022,15 +1107,15 @@ class ApiService {
   // setNotificationsEnabled above, this throws on failure so the
   // Settings screen can show a real error instead of silently
   // pretending it saved.
-  Future<void> updateLocation({String? country, String? region, String? district}) async {
+  Future<void> updateLocation({
+    String? country,
+    String? region,
+    String? district,
+  }) async {
     final response = await _authRequest(
       method: 'PUT',
       endpoint: '/settings/location',
-      body: {
-        'country': country,
-        'region': region,
-        'district': district,
-      },
+      body: {'country': country, 'region': region, 'district': district},
     );
 
     if (response.statusCode != 200) {
@@ -1048,10 +1133,7 @@ class ApiService {
 
   Future<void> clearMemory() async {
     try {
-      await _authRequest(
-        method: 'DELETE',
-        endpoint: '/settings/memory',
-      );
+      await _authRequest(method: 'DELETE', endpoint: '/settings/memory');
     } catch (e) {
       // Ignore
     }
@@ -1080,14 +1162,15 @@ class ApiService {
     return List<Map<String, dynamic>>.from(data['memories'] ?? []);
   }
 
-  Future<void> updateMemory(String memoryId, {String? memoryText, String? category}) async {
+  Future<void> updateMemory(
+    String memoryId, {
+    String? memoryText,
+    String? category,
+  }) async {
     final response = await _authRequest(
       method: 'PATCH',
       endpoint: '/settings/memories/$memoryId',
-      body: {
-        'memory_text': memoryText,
-        'category': category,
-      },
+      body: {'memory_text': memoryText, 'category': category},
     );
 
     if (response.statusCode != 200) {
@@ -1135,10 +1218,7 @@ class ApiService {
   // ============================================================
 
   Future<Map<String, dynamic>> getJourney() async {
-    final response = await _authRequest(
-      method: 'GET',
-      endpoint: '/journey/',
-    );
+    final response = await _authRequest(method: 'GET', endpoint: '/journey/');
 
     if (response.statusCode != 200) {
       Map<String, dynamic> error = {};
