@@ -184,6 +184,7 @@ class ApiService {
   Future<Map<String, dynamic>> sendMessage({
     required String message,
     List<Map<String, String>> history = const [],
+    String? mode,
   }) async {
     final response = await _authRequest(
       method: 'POST',
@@ -192,6 +193,7 @@ class ApiService {
         'message': message,
         'history': history,
         'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
+        if (mode != null) 'mode': mode,
       },
     );
 
@@ -247,24 +249,25 @@ class ApiService {
   // in the returned map below) — premium is unlimited.
   // ============================================================
 
-  Future<http.StreamedResponse> _sendVoiceChatRequest(File audioFile, String? token) async {
+  Future<http.StreamedResponse> _sendVoiceChatRequest(File audioFile, String? token, String? mode) async {
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/voice'));
     request.headers['Authorization'] = 'Bearer $token';
     request.fields['utc_offset_minutes'] = DateTime.now().timeZoneOffset.inMinutes.toString();
+    if (mode != null) request.fields['mode'] = mode;
     request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path));
     return await request.send();
   }
 
-  Future<Map<String, dynamic>> sendVoiceChat(File audioFile) async {
+  Future<Map<String, dynamic>> sendVoiceChat(File audioFile, {String? mode}) async {
     var token = await getAccessToken();
-    var response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token));
+    var response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token, mode));
 
     // Same single-retry-after-refresh pattern as _authRequest.
     if (response.statusCode == 401) {
       final refreshed = await refreshAccessToken();
       if (refreshed) {
         token = await getAccessToken();
-        response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token));
+        response = await http.Response.fromStream(await _sendVoiceChatRequest(audioFile, token, mode));
       }
     }
 
@@ -281,6 +284,33 @@ class ApiService {
       } catch (_) {}
       throw Exception(error['detail'] ?? 'Failed to process voice message');
     }
+  }
+
+  // ============================================================
+  // MODES — "Do It With Me": Ollie speaks first when a mode
+  // session opens. Doesn't count against the daily message limit.
+  // ============================================================
+
+  Future<String> startMode(String mode) async {
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/chat/mode-starter',
+      body: {
+        'mode': mode,
+        'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not start that');
+    }
+
+    final data = jsonDecode(response.body);
+    return data['reply'] ?? '';
   }
 
   // ============================================================

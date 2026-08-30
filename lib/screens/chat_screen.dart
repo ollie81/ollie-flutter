@@ -26,7 +26,18 @@ class ChatMessage {
 
 class ChatScreen extends StatefulWidget {
   final String phoneNumber;
-  const ChatScreen({super.key, required this.phoneNumber});
+  // "Do It With Me" -- when set, Ollie opens the conversation
+  // itself in this mode instead of waiting for the user to type
+  // first, and stays in it (guiding step-by-step, asking what
+  // you're working on) for the rest of this chat session.
+  final String? initialMode;
+  final String? initialModeLabel;
+  const ChatScreen({
+    super.key,
+    required this.phoneNumber,
+    this.initialMode,
+    this.initialModeLabel,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -49,6 +60,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   String _emotionalHeader = "hey there 😊";
   int _currentStreak = 0;
   int _unreadNotifications = 0;
+  late String? _activeMode = widget.initialMode;
 
   // ============================================================
   // VOICE PLAYBACK STATE — elapsed seconds on whichever message is
@@ -90,7 +102,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _initAnimations();
     _generateParticles();
     _loadRewardedAd();
-    _loadHistory();
+    _initChat();
     _loadStreak();
     _loadUnreadCount();
     _audioPlayer.onPlayerComplete.listen((_) => _stopPlaybackTimer());
@@ -164,6 +176,37 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       });
     } catch (e) {
       // History load failing should never block the chat from opening.
+    }
+  }
+
+  // History first, then (if a "Do It With Me" mode was picked) the
+  // opener -- _loadHistory REPLACES _messages wholesale, so starting
+  // the mode session before it finishes would risk the opener
+  // getting wiped out by the history load landing after it.
+  Future<void> _initChat() async {
+    await _loadHistory();
+    if (_activeMode != null) {
+      await _startModeSession();
+    }
+  }
+
+  Future<void> _startModeSession() async {
+    if (!mounted) return;
+    setState(() => _isTyping = true);
+    try {
+      final opener = await _api.startMode(_activeMode!);
+      if (!mounted) return;
+      setState(() {
+        _isTyping = false;
+        _messages.add(ChatMessage(text: opener, isOllie: true, time: DateTime.now()));
+      });
+      _updateEmotionalHeader(opener);
+      _scrollToBottom();
+    } catch (e) {
+      // Falls back silently -- the mode still shapes the rest of the
+      // conversation even without an opener; the user can just type.
+      if (!mounted) return;
+      setState(() => _isTyping = false);
     }
   }
 
@@ -255,7 +298,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _requestOllieReply(String userMessage) async {
     try {
-      final response = await _api.sendMessage(message: userMessage);
+      final response = await _api.sendMessage(message: userMessage, mode: _activeMode);
 
       setState(() => _isTyping = false);
       _updateEmotionalHeader(response['reply']);
@@ -858,7 +901,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() => _isTranscribing = true);
 
     try {
-      final response = await _api.sendVoiceChat(File(path));
+      final response = await _api.sendVoiceChat(File(path), mode: _activeMode);
       final transcribed = (response['transcribed_text'] as String?)?.trim();
       final reply = response['reply'] as String?;
 
@@ -1076,11 +1119,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             },
           ),
           const SizedBox(width: 12),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Ollie', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-              Text('always here', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const Text('Ollie', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(
+                widget.initialModeLabel ?? 'always here',
+                style: TextStyle(
+                  color: widget.initialModeLabel != null ? const Color(0xFFFF8C6B) : Colors.grey,
+                  fontSize: 12,
+                  fontWeight: widget.initialModeLabel != null ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
             ],
           ),
           const Spacer(),
