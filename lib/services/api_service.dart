@@ -801,6 +801,25 @@ class ApiService {
     }
   }
 
+  // Governs how much Ollie reaches out first (morning check-in,
+  // nightly recap, event check-ins, "you disappeared"). Throws on
+  // failure so Settings can show a real error and revert the UI.
+  Future<void> setNotificationFrequency(String frequency) async {
+    final response = await _authRequest(
+      method: 'PUT',
+      endpoint: '/settings/notification-frequency',
+      body: {'frequency': frequency},
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not update notification frequency');
+    }
+  }
+
   // Lets Ollie talk like a local (culture, slang, holidays) --
   // entirely optional, set from Settings. Unlike
   // setNotificationsEnabled above, this throws on failure so the

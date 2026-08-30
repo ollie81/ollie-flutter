@@ -18,7 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final ApiService _api = ApiService();
 
   bool _loading = true;
-  bool _notificationsEnabled = true;
+  String _notificationFrequency = 'normal';
   bool _memoryEnabled = true;
   int _messagesUsedToday = 0;
   int _dailyLimit = 20;
@@ -43,7 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _dailyLimit = usage['daily_limit'] ?? 20;
         _hasActiveAdBonus = usage['has_active_ad_bonus'] ?? false;
         _isPremium = usage['is_premium'] ?? false;
-        _notificationsEnabled = usage['notifications_enabled'] ?? true;
+        _notificationFrequency = usage['notification_frequency'] ?? 'normal';
         _memoryEnabled = usage['memory_enabled'] ?? true;
         _country = usage['country'];
         _region = usage['region'];
@@ -56,16 +56,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _toggleNotifications(bool value) async {
-    setState(() => _notificationsEnabled = value);
+  static const List<Map<String, String>> _frequencyOptions = [
+    {'value': 'off', 'label': 'Off', 'description': "Ollie won't reach out first"},
+    {'value': 'low', 'label': 'Low', 'description': 'Just a morning hello'},
+    {'value': 'normal', 'label': 'Normal', 'description': 'Morning, evening, and check-ins'},
+    {'value': 'frequent', 'label': 'Frequent', 'description': "More often, checks in sooner if you're quiet"},
+  ];
+
+  String _frequencyLabel(String value) {
+    return _frequencyOptions.firstWhere(
+      (o) => o['value'] == value,
+      orElse: () => _frequencyOptions[2],
+    )['label']!;
+  }
+
+  Future<void> _setFrequency(String frequency) async {
+    final previous = _notificationFrequency;
+    setState(() => _notificationFrequency = frequency);
     try {
-      await _api.setNotificationsEnabled(value);
+      await _api.setNotificationFrequency(frequency);
     } catch (e) {
-      // revert on failure
       if (!mounted) return;
-      setState(() => _notificationsEnabled = !value);
+      setState(() => _notificationFrequency = previous);
       _showError('Could not update notification setting');
     }
+  }
+
+  Future<void> _showFrequencyDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1035),
+        title: const Text('How often should Ollie reach out?', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _frequencyOptions.map((option) {
+            final selected = option['value'] == _notificationFrequency;
+            return InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                Navigator.pop(context);
+                if (!selected) _setFrequency(option['value']!);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: selected ? const Color(0xFFFF8C6B) : Colors.white.withOpacity(0.4),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            option['label']!,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                          ),
+                          Text(
+                            option['description']!,
+                            style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _toggleMemory(bool value) async {
@@ -336,11 +407,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                 _sectionLabel('Notifications'),
-                _switchTile(
+                _infoTile(
                   Icons.notifications_none,
-                  'Push notifications',
-                  _notificationsEnabled,
-                  _toggleNotifications,
+                  'How often Ollie reaches out',
+                  _frequencyLabel(_notificationFrequency),
+                ),
+                _actionTile(
+                  Icons.tune,
+                  'Change',
+                  onTap: _showFrequencyDialog,
                 ),
 
                 _sectionLabel('Location'),
