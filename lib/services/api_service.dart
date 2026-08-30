@@ -1235,17 +1235,29 @@ class ApiService {
   // DELETE ACCOUNT
   // ============================================================
 
-  Future<void> deleteAccount() async {
+  /// Schedules deletion (a 14-day grace period, not instant -- see
+  /// DeleteAccountScreen) and returns the ISO date it actually
+  /// happens on. The confirmation phrase is fixed since the typed-
+  /// confirmation gate already lives client-side on that screen;
+  /// this just carries it to the server, which checks it again.
+  Future<String> requestAccountDeletion() async {
     final response = await _authRequest(
-      method: 'DELETE',
-      endpoint: '/settings/account',
+      method: 'POST',
+      endpoint: '/settings/delete-account',
+      body: {'confirmation': 'DELETE'},
     );
 
     if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
       await clearTokens();
       await _storage.delete(key: 'phoneNumber');
+      return data['scheduled_for'] as String;
     } else {
-      throw Exception('Failed to delete account');
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Failed to delete account');
     }
   }
 }
