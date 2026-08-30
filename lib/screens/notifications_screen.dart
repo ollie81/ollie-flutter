@@ -141,10 +141,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        notification['body'] ?? '',
-                        style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14, height: 1.4),
-                      ),
+                      _buildBody(notification),
                     ],
                   ),
                 ),
@@ -153,6 +150,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         );
       },
+    );
+  }
+
+  // The nightly recap ("Today with Ollie") sends its body as
+  // "- line one\n- line two" -- render those as a small bulleted
+  // list instead of a wall of dashes. Every other notification
+  // (including the morning check-in) just renders as plain text.
+  Widget _buildBody(Map<String, dynamic> notification) {
+    final body = notification['body'] as String? ?? '';
+    final lines = body.split('\n').map((l) => l.trim()).where((l) => l.startsWith('- ')).toList();
+
+    if (notification['title'] != 'Today with Ollie' || lines.isEmpty) {
+      return Text(
+        body,
+        style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14, height: 1.4),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines.map((line) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF8C6B).withOpacity(0.7),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  line.substring(2),
+                  style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
