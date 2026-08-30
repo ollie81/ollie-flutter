@@ -915,6 +915,27 @@ class ApiService {
   }
 
   // ============================================================
+  // JOURNEY -- "Our Space": relationship stage + shared history
+  // ============================================================
+
+  Future<Map<String, dynamic>> getJourney() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/journey/',
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not load your journey');
+    }
+
+    return jsonDecode(response.body);
+  }
+
+  // ============================================================
   // DELETE ACCOUNT
   // ============================================================
 

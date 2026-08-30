@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'chat_screen.dart';
 import 'auth_screen.dart';
+import 'our_space_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -273,6 +274,17 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const OurSpaceScreen()),
+            ),
+            child: _glassIconButton(
+              icon: Icons.auto_awesome_outlined,
+              tint: const Color(0xFFFF8C6B),
+            ),
+          ),
+          const SizedBox(width: 10),
           // Profile/menu button — now works
           GestureDetector(
             onTap: _showMenu,
