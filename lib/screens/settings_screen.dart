@@ -22,6 +22,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _dailyLimit = 20;
   bool _hasActiveAdBonus = false;
   bool _isPremium = false;
+  String? _country;
+  String? _region;
+  String? _district;
 
   @override
   void initState() {
@@ -39,6 +42,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _hasActiveAdBonus = usage['has_active_ad_bonus'] ?? false;
         _isPremium = usage['is_premium'] ?? false;
         _notificationsEnabled = usage['notifications_enabled'] ?? true;
+        _country = usage['country'];
+        _region = usage['region'];
+        _district = usage['district'];
         _loading = false;
       });
     } catch (e) {
@@ -57,6 +63,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _notificationsEnabled = !value);
       _showError('Could not update notification setting');
     }
+  }
+
+  String _locationSummary() {
+    final parts = [_district, _region, _country]
+        .where((p) => p != null && p.trim().isNotEmpty)
+        .toList();
+    return parts.isEmpty ? 'Not set' : parts.join(', ');
+  }
+
+  Future<void> _showLocationEditDialog() async {
+    final countryController = TextEditingController(text: _country);
+    final regionController = TextEditingController(text: _region);
+    final districtController = TextEditingController(text: _district);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1035),
+        title: const Text('Your location', style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "so Ollie can talk like a local — reference your culture, "
+                "holidays, what's actually going on where you are",
+                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              _locationField(countryController, 'Country'),
+              const SizedBox(height: 10),
+              _locationField(regionController, 'State / Province / Region'),
+              const SizedBox(height: 10),
+              _locationField(districtController, 'District / City (optional)'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save', style: TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (saved != true || !mounted) return;
+
+    final country = countryController.text.trim();
+    final region = regionController.text.trim();
+    final district = districtController.text.trim();
+
+    try {
+      await _api.updateLocation(
+        country: country.isEmpty ? null : country,
+        region: region.isEmpty ? null : region,
+        district: district.isEmpty ? null : district,
+      );
+      if (!mounted) return;
+      setState(() {
+        _country = country.isEmpty ? null : country;
+        _region = region.isEmpty ? null : region;
+        _district = district.isEmpty ? null : district;
+      });
+      _showSuccess('Location updated');
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Could not update location, try again');
+    }
+  }
+
+  Widget _locationField(TextEditingController controller, String label) {
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFFF8C6B)),
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmClearMemory() async {
@@ -227,6 +326,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Push notifications',
                   _notificationsEnabled,
                   _toggleNotifications,
+                ),
+
+                _sectionLabel('Location'),
+                _infoTile(
+                  Icons.location_on_outlined,
+                  'Your location',
+                  _locationSummary(),
+                ),
+                _actionTile(
+                  Icons.edit_location_alt_outlined,
+                  _country == null && _region == null && _district == null
+                      ? 'Set your location'
+                      : 'Edit location',
+                  onTap: _showLocationEditDialog,
                 ),
 
                 _sectionLabel('Privacy'),

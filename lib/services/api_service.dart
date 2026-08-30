@@ -777,6 +777,31 @@ class ApiService {
     }
   }
 
+  // Lets Ollie talk like a local (culture, slang, holidays) --
+  // entirely optional, set from Settings. Unlike
+  // setNotificationsEnabled above, this throws on failure so the
+  // Settings screen can show a real error instead of silently
+  // pretending it saved.
+  Future<void> updateLocation({String? country, String? region, String? district}) async {
+    final response = await _authRequest(
+      method: 'PUT',
+      endpoint: '/settings/location',
+      body: {
+        'country': country,
+        'region': region,
+        'district': district,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not update location');
+    }
+  }
+
   // ============================================================
   // MEMORY
   // ============================================================
