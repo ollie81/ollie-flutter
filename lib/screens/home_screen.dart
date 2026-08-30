@@ -20,6 +20,12 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   final ApiService _api = ApiService();
+  // Powers the contextual greeting, "Work on my goal", and the
+  // journey strip -- reuses the existing /journey/ endpoint (Phase
+  // 3) rather than adding a new one. Silent on failure: the home
+  // screen must still work with none of this, same principle as
+  // every other best-effort personalization touch in this app.
+  Map<String, dynamic>? _journey;
 
   @override
   void initState() {
@@ -28,6 +34,17 @@ class _HomeScreenState extends State<HomeScreen>
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
+    _loadJourney();
+  }
+
+  Future<void> _loadJourney() async {
+    try {
+      final journey = await _api.getJourney();
+      if (!mounted) return;
+      setState(() => _journey = journey);
+    } catch (e) {
+      // Silent -- see _journey's comment above.
+    }
   }
 
   @override
@@ -48,6 +65,22 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  void _openMode(String mode, String label) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (_, animation, __) => FadeTransition(
+          opacity: animation,
+          child: ChatScreen(phoneNumber: widget.phoneNumber, initialMode: mode, initialModeLabel: label),
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> get _activeGoals =>
+      List<Map<String, dynamic>>.from(_journey?['active_goals'] ?? []);
 
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
@@ -214,8 +247,10 @@ class _HomeScreenState extends State<HomeScreen>
               Column(
                 children: [
                   _buildHeader(context),
-                  const SizedBox(height: 10),
+                  _buildJourneyStrip(),
                   Expanded(child: _buildMainOrb()),
+                  _buildQuickActions(),
+                  const SizedBox(height: 12),
                   _buildBottomPanel(),
                 ],
               ),
@@ -233,6 +268,18 @@ class _HomeScreenState extends State<HomeScreen>
         : hour < 18
             ? "Good afternoon"
             : "Good evening";
+
+    // Contextual when there's something real to reference (an
+    // active goal) -- falls back to the generic line rather than
+    // ever inventing one. When contextual, the third line (which
+    // would just be a rephrasing of the same thing) is dropped
+    // entirely to keep the header compact.
+    final activeGoals = _activeGoals;
+    final hasContext = activeGoals.isNotEmpty &&
+        (activeGoals.first['title'] as String? ?? '').trim().isNotEmpty;
+    final headline = hasContext
+        ? "you've got \"${activeGoals.first['title']}\" to work on today"
+        : 'How are you feeling today?';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
@@ -252,9 +299,9 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'How are you feeling today?',
-                  style: TextStyle(
+                Text(
+                  headline,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 24,
                     height: 1.15,
@@ -262,15 +309,17 @@ class _HomeScreenState extends State<HomeScreen>
                     letterSpacing: -0.7,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  'Ollie is here to talk, listen, and stay with you.',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.55),
-                    fontSize: 14,
-                    height: 1.4,
+                if (!hasContext) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Ollie is here to talk, listen, and stay with you.',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.55),
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -393,43 +442,130 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBottomPanel() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _startButton(),
-          const SizedBox(height: 10),
-          _doItWithMeButton(),
-        ],
+      child: _startButton(),
+    );
+  }
+
+  // "Your journey" preview -- a subtle strip above the orb, only
+  // shown when there's something real to reference (never a
+  // promotional empty state). Reuses /journey/ data already loaded
+  // for the header, so this costs nothing extra.
+  Widget _buildJourneyStrip() {
+    final highlightCount = (_journey?['highlights'] as List?)?.length ?? 0;
+    final completedCount = (_journey?['completed_goals'] as List?)?.length ?? 0;
+    final recentCount = highlightCount + completedCount;
+    if (recentCount == 0) return const SizedBox.shrink();
+
+    final stageEmoji = _journey?['stage_emoji'] as String? ?? '🌱';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const OurSpaceScreen()),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: const Color(0xFFFF8C6B).withOpacity(0.08),
+            border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.15)),
+          ),
+          child: Row(
+            children: [
+              Text(stageEmoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'YOUR JOURNEY',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      recentCount == 1
+                          ? "1 thing you've accomplished recently"
+                          : "$recentCount things you've accomplished recently",
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.3), size: 18),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _doItWithMeButton() {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => DoItWithMeScreen(phoneNumber: widget.phoneNumber)),
+  // Quick actions -- "Talk" is deliberately not repeated here: the
+  // orb above already is that action. "Continue yesterday" just
+  // opens plain chat (history loads automatically), it's not a
+  // separate backend capability. "Work on my goal" only appears
+  // once there's an actual active goal to work on.
+  Widget _buildQuickActions() {
+    final hasActiveGoal = _activeGoals.isNotEmpty;
+
+    final actions = <_QuickAction>[
+      const _QuickAction('Plan my day', Icons.wb_sunny_outlined, mode: 'plan_day'),
+      const _QuickAction('Study together', Icons.school_outlined, mode: 'study'),
+      if (hasActiveGoal) const _QuickAction('Work on my goal', Icons.flag_outlined, mode: 'build'),
+      const _QuickAction('Continue yesterday', Icons.history_rounded, mode: null),
+      const _QuickAction('More', Icons.more_horiz_rounded, mode: 'more'),
+    ];
+
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        itemCount: actions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) => _quickActionChip(actions[index]),
       ),
+    );
+  }
+
+  Widget _quickActionChip(_QuickAction action) {
+    return GestureDetector(
+      onTap: () {
+        if (action.mode == 'more') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DoItWithMeScreen(phoneNumber: widget.phoneNumber)),
+          );
+        } else if (action.mode == null) {
+          _openChat();
+        } else {
+          _openMode(action.mode!, action.label);
+        }
+      },
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(21),
           color: Colors.white.withOpacity(0.06),
           border: Border.all(color: Colors.white.withOpacity(0.12)),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.groups_2_outlined, color: Colors.white.withOpacity(0.85), size: 18),
-            const SizedBox(width: 8),
+            Icon(action.icon, color: Colors.white.withOpacity(0.8), size: 15),
+            const SizedBox(width: 6),
             Text(
-              'Do it with me',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
+              action.label,
+              style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -532,6 +668,16 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+}
+
+class _QuickAction {
+  final String label;
+  final IconData icon;
+  // A "Do It With Me" mode key (see modes.py), null for the one
+  // action ("Continue yesterday") that just opens plain chat, or
+  // 'more' to open the full picker.
+  final String? mode;
+  const _QuickAction(this.label, this.icon, {required this.mode});
 }
 
 class _FloatingParticles extends StatefulWidget {
