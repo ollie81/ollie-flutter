@@ -92,18 +92,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: _frequencyOptions.map((option) {
             final selected = option['value'] == _notificationFrequency;
+            // "Frequent" is Premium-only (see settings.py's write-time
+            // gate) -- a free user tapping it goes to the paywall
+            // instead of a dead-end error.
+            final locked = option['value'] == 'frequent' && !_isPremium;
             return InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: () {
                 Navigator.pop(context);
-                if (!selected) _setFrequency(option['value']!);
+                if (locked) {
+                  _openPaywall();
+                } else if (!selected) {
+                  _setFrequency(option['value']!);
+                }
               },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                 child: Row(
                   children: [
                     Icon(
-                      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      locked
+                          ? Icons.lock_outline
+                          : (selected ? Icons.radio_button_checked : Icons.radio_button_unchecked),
                       color: selected ? const Color(0xFFFF8C6B) : Colors.white.withOpacity(0.4),
                       size: 20,
                     ),
@@ -112,9 +122,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            option['label']!,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                          Row(
+                            children: [
+                              Text(
+                                option['label']!,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                              ),
+                              if (locked) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  'PREMIUM',
+                                  style: TextStyle(
+                                    color: const Color(0xFFFF8C6B).withOpacity(0.9),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           Text(
                             option['description']!,
