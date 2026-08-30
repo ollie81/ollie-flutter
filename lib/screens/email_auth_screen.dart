@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 
 enum _EmailAuthMode { login, signup, forgot }
 
@@ -89,7 +90,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
           return;
         }
         await _api.emailLogin(email: email, password: _passwordController.text);
-        await _saveAndNavigate(email);
+        await _saveAndNavigate(email, isNewUser: false);
       } else if (_mode == _EmailAuthMode.signup) {
         if (_passwordController.text.length < 6) {
           _showError('Password must be at least 6 characters');
@@ -123,7 +124,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
             otp: _signupOtpController.text.trim(),
             dateOfBirth: _formatDate(_dateOfBirth!),
           );
-          await _saveAndNavigate(email);
+          await _saveAndNavigate(email, isNewUser: true);
         }
       } else if (_mode == _EmailAuthMode.forgot) {
         if (!_otpSent) {
@@ -176,7 +177,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     }
   }
 
-  Future<void> _saveAndNavigate(String email) async {
+  Future<void> _saveAndNavigate(String email, {required bool isNewUser}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phoneNumber', email);
     await prefs.setBool('is_logged_in', true);
@@ -184,7 +185,11 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: email)),
+        MaterialPageRoute(
+          builder: (_) => isNewUser
+              ? OnboardingScreen(phoneNumber: email)
+              : HomeScreen(phoneNumber: email),
+        ),
       );
     }
   }
