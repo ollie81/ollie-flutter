@@ -92,6 +92,12 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       );
+    } else if (method == 'PUT') {
+      response = await http.put(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      );
     } else if (method == 'DELETE') {
       response = await http.delete(
         Uri.parse('$baseUrl$endpoint'),
@@ -111,6 +117,12 @@ class ApiService {
         final newHeaders = await _authHeaders();
         if (method == 'POST') {
           response = await http.post(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: newHeaders,
+            body: body != null ? jsonEncode(body) : null,
+          );
+        } else if (method == 'PUT') {
+          response = await http.put(
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
