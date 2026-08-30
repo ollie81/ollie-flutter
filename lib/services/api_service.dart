@@ -557,6 +557,109 @@ class ApiService {
   }
 
   // ============================================================
+  // EMAIL LOGIN — third sign-in method alongside phone and Google.
+  // Same shapes as the phone methods above, against /auth/email/*.
+  // ============================================================
+
+  Future<Map<String, dynamic>> emailRequestSignupOtp({required String email}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email/signup/request-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to send OTP');
+    }
+  }
+
+  Future<Map<String, dynamic>> emailSignup({
+    required String email,
+    required String password,
+    required String otp,
+    String? dateOfBirth,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email/signup'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+        'otp': otp,
+        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await saveTokens(accessToken: data['access_token'], refreshToken: data['refresh_token']);
+      await _storage.write(key: 'phoneNumber', value: email);
+      return data;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Signup failed');
+    }
+  }
+
+  Future<Map<String, dynamic>> emailLogin({
+    required String email,
+    required String password,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await saveTokens(accessToken: data['access_token'], refreshToken: data['refresh_token']);
+      await _storage.write(key: 'phoneNumber', value: email);
+      return data;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Login failed');
+    }
+  }
+
+  Future<Map<String, dynamic>> emailForgotPassword({required String email}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email/forgot'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to send OTP');
+    }
+  }
+
+  Future<Map<String, dynamic>> emailResetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/email/reset'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'otp': otp, 'new_password': newPassword}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Password reset failed');
+    }
+  }
+
+  // ============================================================
   // GOOGLE LOGIN
   // ============================================================
 
