@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'chat_screen.dart';
 import 'auth_screen.dart';
+import 'do_it_with_me_screen.dart';
 import 'our_space_screen.dart';
 import 'settings_screen.dart';
 
@@ -396,7 +397,42 @@ class _HomeScreenState extends State<HomeScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           _startButton(),
+          const SizedBox(height: 10),
+          _doItWithMeButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _doItWithMeButton() {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => DoItWithMeScreen(phoneNumber: widget.phoneNumber)),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          color: Colors.white.withOpacity(0.06),
+          border: Border.all(color: Colors.white.withOpacity(0.12)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.groups_2_outlined, color: Colors.white.withOpacity(0.85), size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Do it with me',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
