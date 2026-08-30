@@ -1232,6 +1232,23 @@ class ApiService {
   }
 
   // ============================================================
+  // EXPORT DATA
+  // ============================================================
+
+  Future<Map<String, dynamic>> exportUserData() async {
+    final response = await _authRequest(
+      method: 'GET',
+      endpoint: '/settings/export-data',
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Could not export your data');
+    }
+  }
+
+  // ============================================================
   // DELETE ACCOUNT
   // ============================================================
 
