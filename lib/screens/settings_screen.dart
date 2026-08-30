@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
@@ -21,6 +25,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final ApiService _api = ApiService();
 
   bool _loading = true;
+  bool _isExporting = false;
   String _notificationFrequency = 'normal';
   bool _memoryEnabled = true;
   int _messagesUsedToday = 0;
@@ -100,6 +105,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
   String _monthName(int month) => _monthNames[(month - 1).clamp(0, 11)];
+
+  Future<void> _exportData() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+    try {
+      final data = await _api.exportUserData();
+      final jsonString = const JsonEncoder.withIndent('  ').convert(data);
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/ollie_data_export_${DateTime.now().millisecondsSinceEpoch}.json');
+      await file.writeAsString(jsonString);
+      if (!mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: 'Your Ollie data export'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Could not export your data, try again');
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
 
   Future<void> _openSubscriptionManagement() async {
     final uri = Uri.parse('https://play.google.com/store/account/subscriptions');
@@ -436,6 +462,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Icons.logout,
                   'Log out',
                   onTap: _logout,
+                ),
+                _actionTile(
+                  Icons.download_outlined,
+                  _isExporting ? 'Preparing your export…' : 'Export my data',
+                  onTap: _exportData,
                 ),
                 _actionTile(
                   Icons.delete_outline,
