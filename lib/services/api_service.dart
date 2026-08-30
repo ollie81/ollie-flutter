@@ -50,7 +50,28 @@ class ApiService {
   // TOKEN REFRESH
   // ============================================================
 
-  Future<bool> refreshAccessToken() async {
+  // Coalesces concurrent refresh attempts into one in-flight call.
+  // The backend rotates refresh tokens (single-use -- every
+  // /auth/refresh deletes the old one and issues a new one), so if
+  // two requests 401 around the same moment (e.g. a screen loading
+  // its data while the user taps something else) and each
+  // independently calls refreshAccessToken with the same
+  // now-shared token, the loser gets "Invalid refresh token" back
+  // and wipes out the tokens the winner just saved via clearTokens
+  // -- even though the winner's refresh genuinely succeeded. Any
+  // retry after that sends no token at all, which looks like a
+  // second, unrelated 401 on the exact same request. Concurrent
+  // callers now await the SAME network call instead of each
+  // starting their own.
+  Future<bool>? _refreshInFlight;
+
+  Future<bool> refreshAccessToken() {
+    return _refreshInFlight ??= _doRefreshAccessToken().whenComplete(() {
+      _refreshInFlight = null;
+    });
+  }
+
+  Future<bool> _doRefreshAccessToken() async {
     final refreshToken = await getRefreshToken();
     if (refreshToken == null) return false;
 
