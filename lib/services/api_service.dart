@@ -314,6 +314,49 @@ class ApiService {
   }
 
   // ============================================================
+  // ONBOARDING — a one-time personalized name + welcome message
+  // right after signup. See onboarding_screen.dart.
+  // ============================================================
+
+  Future<void> updateDisplayName(String name) async {
+    final response = await _authRequest(
+      method: 'PUT',
+      endpoint: '/settings/display-name',
+      body: {'name': name},
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not update name');
+    }
+  }
+
+  Future<String> getChatWelcome(String name) async {
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/chat/welcome',
+      body: {
+        'name': name,
+        'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      Map<String, dynamic> error = {};
+      try {
+        error = jsonDecode(response.body);
+      } catch (_) {}
+      throw Exception(error['detail'] ?? 'Could not generate welcome message');
+    }
+
+    final data = jsonDecode(response.body);
+    return data['reply'] ?? '';
+  }
+
+  // ============================================================
   // IMAGE INPUT — send a photo (with an optional caption), get a
   // real reaction to it. Free tier, same daily message cap as
   // sendMessage/'/chat' -- a shared photo isn't a premium feature.

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 
 enum _PhoneAuthMode { login, signup, forgot }
 
@@ -96,7 +97,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           return;
         }
         await _api.login(phoneNumber: phone, password: _passwordController.text);
-        await _saveAndNavigate(phone);
+        await _saveAndNavigate(phone, isNewUser: false);
       } else if (_mode == _PhoneAuthMode.signup) {
         if (_passwordController.text.length < 6) {
           _showError('Password must be at least 6 characters');
@@ -130,7 +131,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
             otp: _signupOtpController.text.trim(),
             dateOfBirth: _formatDate(_dateOfBirth!),
           );
-          await _saveAndNavigate(phone);
+          await _saveAndNavigate(phone, isNewUser: true);
         }
       } else if (_mode == _PhoneAuthMode.forgot) {
         if (!_otpSent) {
@@ -183,7 +184,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     }
   }
 
-  Future<void> _saveAndNavigate(String phone) async {
+  Future<void> _saveAndNavigate(String phone, {required bool isNewUser}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phoneNumber', phone);
     await prefs.setBool('is_logged_in', true);
@@ -191,7 +192,11 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: phone)),
+        MaterialPageRoute(
+          builder: (_) => isNewUser
+              ? OnboardingScreen(phoneNumber: phone)
+              : HomeScreen(phoneNumber: phone),
+        ),
       );
     }
   }

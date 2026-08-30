@@ -32,11 +32,16 @@ class ChatScreen extends StatefulWidget {
   // you're working on) for the rest of this chat session.
   final String? initialMode;
   final String? initialModeLabel;
+  // Set only right after onboarding -- Ollie's personalized first
+  // message uses this name, generated once then never again (see
+  // _startWelcomeMessage).
+  final String? initialWelcomeName;
   const ChatScreen({
     super.key,
     required this.phoneNumber,
     this.initialMode,
     this.initialModeLabel,
+    this.initialWelcomeName,
   });
 
   @override
@@ -179,14 +184,38 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
-  // History first, then (if a "Do It With Me" mode was picked) the
-  // opener -- _loadHistory REPLACES _messages wholesale, so starting
-  // the mode session before it finishes would risk the opener
-  // getting wiped out by the history load landing after it.
+  // History first, then (if a "Do It With Me" mode was picked, or
+  // this is the personalized post-onboarding opener) the greeting
+  // -- _loadHistory REPLACES _messages wholesale, so starting either
+  // one before it finishes would risk it getting wiped out by the
+  // history load landing after it. The two are mutually exclusive
+  // entry points (mode vs. brand-new-user welcome), never both.
   Future<void> _initChat() async {
     await _loadHistory();
     if (_activeMode != null) {
       await _startModeSession();
+    } else if (widget.initialWelcomeName != null) {
+      await _startWelcomeMessage();
+    }
+  }
+
+  Future<void> _startWelcomeMessage() async {
+    if (!mounted) return;
+    setState(() => _isTyping = true);
+    try {
+      final greeting = await _api.getChatWelcome(widget.initialWelcomeName!);
+      if (!mounted) return;
+      setState(() {
+        _isTyping = false;
+        _messages.add(ChatMessage(text: greeting, isOllie: true, time: DateTime.now()));
+      });
+      _updateEmotionalHeader(greeting);
+      _scrollToBottom();
+    } catch (e) {
+      // Falls back silently -- worst case the user just lands in an
+      // empty chat and types first, same as before onboarding existed.
+      if (!mounted) return;
+      setState(() => _isTyping = false);
     }
   }
 

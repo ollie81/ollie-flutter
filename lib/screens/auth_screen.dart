@@ -6,6 +6,7 @@ import '../services/notification_service.dart';
 import 'email_auth_screen.dart';
 import 'phone_auth_screen.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 
 // Landing screen for signing in -- picks between the three methods,
 // then hands off to a dedicated screen for whichever one has an
@@ -61,7 +62,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
       // googleLogin() already saves tokens to secure storage
       // internally — no need to duplicate that here.
-      await _api.googleLogin(idToken: idToken);
+      final result = await _api.googleLogin(idToken: idToken);
+      final isNewUser = result['is_new_user'] == true;
+      final googleName = result['username'] as String?;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', true);
@@ -71,7 +74,11 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: googleUser.email)),
+          MaterialPageRoute(
+            builder: (_) => isNewUser
+                ? OnboardingScreen(phoneNumber: googleUser.email, initialName: googleName)
+                : HomeScreen(phoneNumber: googleUser.email),
+          ),
         );
       }
     } catch (e) {
