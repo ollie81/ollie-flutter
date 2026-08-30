@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../services/purchase_service.dart';
 import 'auth_screen.dart';
+import 'delete_account_screen.dart';
 import 'memories_screen.dart';
 import 'paywall_screen.dart';
 import 'privacy_policy_screen.dart';
@@ -345,30 +346,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _confirmDeleteAccount() async {
-    final confirmed = await _showConfirmDialog(
-      title: 'Delete account?',
-      message:
-          'This permanently deletes your account and everything Ollie remembers '
-          'about you. This cannot be undone.',
-      confirmLabel: 'Delete account',
-      isDestructive: true,
-    );
-    if (confirmed != true) return;
-
-    try {
-      await _api.deleteAccount();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-        (route) => false,
-      );
-    } catch (e) {
-      _showError('Could not delete account, try again');
-    }
-  }
-
   Future<void> _openPaywall() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
     _loadUsage();
@@ -463,7 +440,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _actionTile(
                   Icons.delete_outline,
                   'Delete account',
-                  onTap: _confirmDeleteAccount,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
+                  ),
                   destructive: true,
                 ),
 
