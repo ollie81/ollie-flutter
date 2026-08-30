@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import '../services/purchase_service.dart';
 import 'auth_screen.dart';
 import 'memories_screen.dart';
 import 'paywall_screen.dart';
@@ -28,10 +30,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _region;
   String? _district;
 
+  // Subscription details -- fetched separately from /premium/status
+  // (the canonical, Play-re-verifying premium check), not /usage's
+  // simpler local one. Null product/expiry just means "don't have
+  // the details yet" or "not on a paid plan" -- the plan summary
+  // tile below falls back to the plain Free/Premium label either way.
+  String? _productId;
+  int? _expiryTimeMillis;
+
   @override
   void initState() {
     super.initState();
     _loadUsage();
+    _loadPremiumDetails();
   }
 
   Future<void> _loadUsage() async {
@@ -53,6 +64,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadPremiumDetails() async {
+    try {
+      final status = await _api.checkPremiumStatus();
+      if (!mounted) return;
+      setState(() {
+        _productId = status['product_id'];
+        _expiryTimeMillis = status['expiry_time_millis'];
+      });
+    } catch (e) {
+      // Plan summary just falls back to the plain Free/Premium label.
+    }
+  }
+
+  String? get _planLabel {
+    if (_productId == PurchaseService.lifetimeId) return 'Lifetime';
+    if (_productId == PurchaseService.yearlyId) return 'Yearly';
+    if (_productId == PurchaseService.monthlyId) return 'Monthly';
+    return null;
+  }
+
+  String? get _renewalSummary {
+    if (_productId == PurchaseService.lifetimeId) return 'No renewal — yours for life 🎉';
+    if (_expiryTimeMillis == null) return null;
+    final date = DateTime.fromMillisecondsSinceEpoch(_expiryTimeMillis!);
+    final formatted = '${_monthName(date.month)} ${date.day}, ${date.year}';
+    return 'Renews $formatted';
+  }
+
+  static const List<String> _monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  String _monthName(int month) => _monthNames[(month - 1).clamp(0, 11)];
+
+  Future<void> _openSubscriptionManagement() async {
+    final uri = Uri.parse('https://play.google.com/store/account/subscriptions');
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) throw Exception('launch returned false');
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Could not open the Play Store — manage your subscription there directly.');
     }
   }
 
@@ -423,8 +478,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _infoTile(
                   Icons.workspace_premium_outlined,
                   'Plan',
-                  _isPremium ? 'Premium' : 'Free',
+                  _isPremium ? (_planLabel ?? 'Premium') : 'Free',
                 ),
+                if (_isPremium && _renewalSummary != null)
+                  _infoTile(Icons.event_repeat_outlined, 'Renewal', _renewalSummary!),
+                if (_isPremium && _productId != PurchaseService.lifetimeId)
+                  _actionTile(
+                    Icons.open_in_new_rounded,
+                    'Manage subscription',
+                    onTap: _openSubscriptionManagement,
+                  ),
                 if (!_isPremium)
                   _actionTile(
                     Icons.workspace_premium_outlined,
