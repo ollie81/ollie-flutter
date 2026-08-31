@@ -12,7 +12,7 @@ plugins {
     id("com.google.gms.google-services")
 }
 android {
-    namespace = "com.example.ollie_app"
+    namespace = "com.oliviranzi.ollie"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
     compileOptions {
@@ -23,7 +23,7 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
     defaultConfig {
-        applicationId = "com.example.ollie_app"
+        applicationId = "com.oliviranzi.ollie"
         minSdk = 18
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

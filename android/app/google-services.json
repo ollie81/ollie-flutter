@@ -41,6 +41,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:431417738635:android:c7cbda9b4ecfd159fc5b8e",
+        "android_client_info": {
+          "package_name": "com.oliviranzi.ollie"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuv0WH-5iAIStBZiH3sK8vBaJLxOVXjiY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
