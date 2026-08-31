@@ -429,7 +429,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (e.toString().contains('Daily limit reached')) {
         _showLimitReachedSheet(userMessage);
       } else {
-        _showError(e.toString());
+        _showError(e.toString().replaceFirst('Exception: ', ''));
       }
     }
   }

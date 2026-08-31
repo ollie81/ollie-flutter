@@ -103,6 +103,23 @@ class ApiService {
     required String endpoint,
     Map<String, dynamic>? body,
   }) async {
+    try {
+      return await _doAuthRequest(method: method, endpoint: endpoint, body: body);
+    } on SocketException {
+      // DNS failure, connection refused, network unreachable -- no
+      // signal, in other words. Every screen's catch block already
+      // shows whatever this throws, so converting it here once
+      // means every one of them gets a clean message for free
+      // instead of a raw "Failed host lookup" string.
+      throw Exception('No internet connection. Check your signal and try again.');
+    }
+  }
+
+  Future<http.Response> _doAuthRequest({
+    required String method,
+    required String endpoint,
+    Map<String, dynamic>? body,
+  }) async {
     final headers = await _authHeaders();
 
     http.Response response;

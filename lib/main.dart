@@ -37,6 +37,7 @@ class OllieApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NotificationService.navigatorKey,
       title: 'Ollie',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -90,7 +91,21 @@ class _AuthWrapperState extends State<AuthWrapper> {
           context,
           MaterialPageRoute(builder: (_) => HomeScreen(phoneNumber: _phoneNumber!)),
         );
+        _openChatIfLaunchedFromNotification();
       }
+    }
+  }
+
+  // If the app was fully closed and a notification tap is what
+  // launched it, NotificationService's onMessageOpenedApp listener
+  // never fires for this specific case -- getInitialMessage() is
+  // the separate check FCM provides for a cold start. Checked here,
+  // after login state is confirmed, rather than in main() before
+  // runApp() -- navigatorKey isn't attached to anything that early.
+  Future<void> _openChatIfLaunchedFromNotification() async {
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      await NotificationService.openChatFromNotification();
     }
   }
 
