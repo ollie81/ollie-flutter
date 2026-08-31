@@ -1,6 +1,14 @@
+import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../screens/chat_screen.dart';
 
 class NotificationService {
+  // Lets openChatFromNotification navigate from outside the widget
+  // tree (a push-notification callback has no BuildContext of its
+  // own) -- attached to MaterialApp in main.dart.
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   static Future<void> init() async {
     final messaging = FirebaseMessaging.instance;
 
@@ -27,13 +35,12 @@ class NotificationService {
       }
     });
 
-    // Handle the case where the user taps a notification and it
-    // opens/resumes the app.
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      // TODO: navigate to a relevant screen if needed, e.g. based
-      // on message.data.
-      print('Notification tapped: ${message.data}');
-    });
+    // Tapped while the app was backgrounded (not fully closed).
+    // Cold-start taps -- the app was terminated and this
+    // notification is what launched it -- don't fire this; see
+    // AuthWrapper in main.dart, which checks getInitialMessage()
+    // once login state (and therefore navigatorKey) is ready.
+    FirebaseMessaging.onMessageOpenedApp.listen((_) => openChatFromNotification());
   }
 
   static Future<void> setupFirebase() async {
@@ -47,5 +54,18 @@ class NotificationService {
 
   static Future<String?> getFCMToken() async {
     return await FirebaseMessaging.instance.getToken();
+  }
+
+  /// Every notification this app sends — morning check-in, nightly
+  /// recap, a reminder, "you disappeared" — is Ollie saying
+  /// something in chat, so there's no per-notification type to
+  /// route on: a tap always means "open the conversation".
+  static Future<void> openChatFromNotification() async {
+    final prefs = await SharedPreferences.getInstance();
+    final phoneNumber = prefs.getString('phoneNumber');
+    if (phoneNumber == null) return;
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => ChatScreen(phoneNumber: phoneNumber)),
+    );
   }
 }
