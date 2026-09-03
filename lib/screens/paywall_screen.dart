@@ -9,7 +9,8 @@ class _Tier {
   final String title;
   final String fallbackPrice;
   final String subtitle;
-  const _Tier(this.productId, this.title, this.fallbackPrice, this.subtitle);
+  final bool isRecommended;
+  const _Tier(this.productId, this.title, this.fallbackPrice, this.subtitle, {this.isRecommended = false});
 }
 
 const _tiers = [
@@ -24,6 +25,7 @@ const _tiers = [
     'Yearly',
     '\$89.99/yr',
     'Best value — about 25% less than paying monthly',
+    isRecommended: true,
   ),
   _Tier(
     PurchaseService.lifetimeId,
@@ -220,12 +222,26 @@ class _PaywallScreenState extends State<PaywallScreen> {
     final available = product != null;
     final price = product?.price ?? tier.fallbackPrice;
 
-    return Container(
-      padding: const EdgeInsets.all(18),
+    final card = Container(
+      padding: EdgeInsets.fromLTRB(18, tier.isRecommended ? 22 : 18, 18, 18),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1035),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(
+          color: tier.isRecommended
+              ? const Color(0xFFFF8C6B).withOpacity(0.6)
+              : Colors.white.withOpacity(0.08),
+          width: tier.isRecommended ? 1.5 : 1,
+        ),
+        boxShadow: tier.isRecommended
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFFF8C6B).withOpacity(0.15),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -273,6 +289,35 @@ class _PaywallScreenState extends State<PaywallScreen> {
           ),
         ],
       ),
+    );
+
+    if (!tier.isRecommended) return card;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        card,
+        Positioned(
+          top: -1,
+          left: 18,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'BEST VALUE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
