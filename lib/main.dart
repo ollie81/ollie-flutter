@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -10,16 +11,25 @@ import 'services/api_service.dart';
 import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 
-void main() async {
+// Crash/error reporting. Empty until a real Sentry project exists --
+// paste the DSN here once you have one (a DSN is meant to be public,
+// it only lets events be submitted, not read, so it's fine to
+// hardcode like baseUrl in api_service.dart is). Left empty, _initApp
+// below just runs the app directly with no reporting, same "absent
+// third-party service is a clean no-op" pattern as
+// FIREBASE_CREDENTIALS_JSON on the backend.
+const String _sentryDsn = '';
+
+Future<void> _initApp() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
   await Firebase.initializeApp();
-  
+
   // Initialize notifications
   await NotificationService.init();
   await NotificationService.setupFirebase();
-  
+
   // Initialize Google Ads
   await MobileAds.instance.initialize();
 
@@ -29,6 +39,22 @@ void main() async {
   PurchaseService.instance.init();
 
   runApp(const OllieApp());
+}
+
+void main() async {
+  if (_sentryDsn.isEmpty) {
+    await _initApp();
+    return;
+  }
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = _sentryDsn;
+      // No breadcrumbs/context beyond the crash itself -- chat
+      // content and account details never touch this.
+      options.sendDefaultPii = false;
+    },
+    appRunner: _initApp,
+  );
 }
 
 class OllieApp extends StatelessWidget {

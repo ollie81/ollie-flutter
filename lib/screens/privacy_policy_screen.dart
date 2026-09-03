@@ -72,6 +72,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 'to log in), Firebase (push notifications), and AdMob (the optional rewarded '
                 'ads that unlock bonus messages).'),
             _bullet('Supabase and Railway — host our database and backend infrastructure.'),
+            _bullet('Sentry — helps us catch and fix bugs when the app crashes or a request '
+                'fails. It receives technical error details (like a stack trace), never your '
+                'messages or account details.'),
             _bullet('We don\'t sell your data, and we don\'t share it for third-party advertising.'),
           ]),
           _section('Your choices', [
