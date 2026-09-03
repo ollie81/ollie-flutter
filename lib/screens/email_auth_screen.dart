@@ -10,7 +10,7 @@ enum _EmailAuthMode { login, signup, forgot }
 // Email/password sign-in/signup/forgot-password -- same shape as
 // phone_auth_screen.dart, just an email field instead of the
 // phone/country picker, and OTP verification is a code emailed via
-// Resend (see auth.py's /auth/email/* routes) rather than SMS.
+// SendGrid (see auth.py's /auth/email/* routes) rather than SMS.
 class EmailAuthScreen extends StatefulWidget {
   const EmailAuthScreen({super.key});
 
