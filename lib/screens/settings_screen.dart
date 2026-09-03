@@ -12,6 +12,7 @@ import 'delete_account_screen.dart';
 import 'memories_screen.dart';
 import 'paywall_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'terms_of_service_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String phoneNumber;
@@ -562,6 +563,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                  ),
+                ),
+                _actionTile(
+                  Icons.description_outlined,
+                  'Terms of Service',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
                   ),
                 ),
                 const SizedBox(height: 40),
