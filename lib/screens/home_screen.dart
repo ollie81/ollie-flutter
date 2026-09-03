@@ -26,6 +26,12 @@ class _HomeScreenState extends State<HomeScreen>
   // screen must still work with none of this, same principle as
   // every other best-effort personalization touch in this app.
   Map<String, dynamic>? _journey;
+  // The streak already exists (see chat_screen.dart's identical
+  // badge) but used to only be visible one screen deep, after
+  // someone had already committed to opening chat -- too late for
+  // a "don't break the chain" nudge to do its job. Surfacing it
+  // here too, right next to the greeting, is the whole fix.
+  int _currentStreak = 0;
 
   @override
   void initState() {
@@ -35,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen>
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
     _loadJourney();
+    _loadStreak();
   }
 
   Future<void> _loadJourney() async {
@@ -44,6 +51,16 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() => _journey = journey);
     } catch (e) {
       // Silent -- see _journey's comment above.
+    }
+  }
+
+  Future<void> _loadStreak() async {
+    try {
+      final usage = await _api.getUsage();
+      final streak = usage['current_streak'];
+      if (mounted && streak is int) setState(() => _currentStreak = streak);
+    } catch (e) {
+      // Silent -- same principle as _loadJourney above.
     }
   }
 
@@ -324,6 +341,10 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           const SizedBox(width: 12),
+          if (_currentStreak > 0) ...[
+            _buildStreakBadge(),
+            const SizedBox(width: 10),
+          ],
           GestureDetector(
             onTap: () => Navigator.push(
               context,
@@ -632,6 +653,34 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ),
       child: Icon(icon, color: tint, size: 20),
+    );
+  }
+
+  // Same visual as chat_screen.dart's badge -- same feature, should
+  // read as the same feature wherever it shows up.
+  Widget _buildStreakBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFFFF8C6B).withOpacity(0.15),
+        border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Text(
+            '$_currentStreak',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
