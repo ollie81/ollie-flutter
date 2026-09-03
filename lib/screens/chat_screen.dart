@@ -39,6 +39,13 @@ class ChatMessage {
   // message until this is set; copy never needs it.
   String? id;
   final ReplyPreview? replyTo;
+  // Preserved from send time purely so a retry can attach the same
+  // reply_to_id -- ReplyPreview only carries sender/text for display.
+  final String? replyToId;
+  // Set when the /chat round-trip for this message fails outright
+  // (not the daily-limit case, which already has its own recovery
+  // sheet). Never true for an Ollie message.
+  bool failed = false;
   ChatMessage({
     required this.text,
     required this.isOllie,
@@ -46,6 +53,7 @@ class ChatMessage {
     this.imageFile,
     this.id,
     this.replyTo,
+    this.replyToId,
   });
 }
 
@@ -381,6 +389,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               text: replyTarget.text,
             )
           : null,
+      replyToId: replyTarget?.id,
     );
     setState(() {
       _messages.add(sentMessage);
@@ -424,7 +433,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _scrollToBottom();
       _maybeAutoSpeak(ollieMessage);
     } catch (e) {
-      setState(() => _isTyping = false);
+      setState(() {
+        _isTyping = false;
+        // Daily-limit has its own recovery sheet below -- only a
+        // real failure (expired session, no signal, server error)
+        // leaves the bubble looking sent with nothing the user can
+        // do about it, so only that case gets marked failed.
+        if (!e.toString().contains('Daily limit reached')) {
+          sentMessage?.failed = true;
+        }
+      });
 
       if (e.toString().contains('Daily limit reached')) {
         _showLimitReachedSheet(userMessage);
@@ -432,6 +450,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _showError(e.toString().replaceFirst('Exception: ', ''));
       }
     }
+  }
+
+  Future<void> _retryFailedMessage(ChatMessage message) async {
+    if (_isTyping) return;
+    setState(() {
+      message.failed = false;
+      _isTyping = true;
+    });
+    await _requestOllieReply(
+      message.text,
+      sentMessage: message,
+      replyToId: message.replyToId,
+    );
   }
 
   // ============================================================
@@ -1693,150 +1724,183 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           duration: const Duration(milliseconds: 400),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              mainAxisAlignment: message.isOllie
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: message.isOllie
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.end,
               children: [
-                // Ollie avatar
-                if (message.isOllie) ...[
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                      ),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'O',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                // Message bubble
-                Flexible(
-                  child: GestureDetector(
-                    onLongPress: () => _showMessageActions(message),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      constraints: BoxConstraints(
-                        maxWidth:
-                            MediaQuery.of(context).size.width *
-                            (hasImage ? 0.68 : 0.7),
-                      ),
-                      padding: hasImage
-                          ? EdgeInsets.zero
-                          : const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                      decoration: BoxDecoration(
-                        borderRadius: bubbleRadius,
-                        gradient: message.isOllie
-                            ? LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withOpacity(0.12),
-                                  Colors.white.withOpacity(0.06),
-                                ],
-                              )
-                            : const LinearGradient(
-                                colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                              ),
-                        border: isHighlighted
-                            ? Border.all(
-                                color: const Color(0xFFFF8C6B),
-                                width: 2,
-                              )
-                            : (message.isOllie
-                                  ? Border.all(
-                                      color: Colors.white.withOpacity(0.08),
-                                    )
-                                  : null),
-                        boxShadow: [
-                          BoxShadow(
-                            color: message.isOllie
-                                ? Colors.black.withOpacity(0.1)
-                                : const Color(0xFFFF8C6B).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
+                Row(
+                  mainAxisAlignment: message.isOllie
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Ollie avatar
+                    if (message.isOllie) ...[
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
                           ),
-                        ],
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'O',
+                            style: TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
                       ),
-                      child: hasImage
-                          ? ClipRRect(
-                              borderRadius: bubbleRadius,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxHeight: 260,
-                                    ),
-                                    child: Image.file(
-                                      message.imageFile!,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                    ),
+                      const SizedBox(width: 8),
+                    ],
+                    // Message bubble
+                    Flexible(
+                      child: GestureDetector(
+                        onLongPress: () => _showMessageActions(message),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          constraints: BoxConstraints(
+                            maxWidth:
+                                MediaQuery.of(context).size.width *
+                                (hasImage ? 0.68 : 0.7),
+                          ),
+                          padding: hasImage
+                              ? EdgeInsets.zero
+                              : const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 12,
+                                ),
+                          decoration: BoxDecoration(
+                            borderRadius: bubbleRadius,
+                            gradient: message.isOllie
+                                ? LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withOpacity(0.12),
+                                      Colors.white.withOpacity(0.06),
+                                    ],
+                                  )
+                                : const LinearGradient(
+                                    colors: [
+                                      Color(0xFFFF8C6B),
+                                      Color(0xFFE86B4A),
+                                    ],
                                   ),
-                                  if (hasCaption)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      child: Text(
-                                        message.text,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 15,
-                                          height: 1.4,
+                            border: isHighlighted
+                                ? Border.all(
+                                    color: const Color(0xFFFF8C6B),
+                                    width: 2,
+                                  )
+                                : (message.isOllie
+                                      ? Border.all(
+                                          color: Colors.white.withOpacity(0.08),
+                                        )
+                                      : null),
+                            boxShadow: [
+                              BoxShadow(
+                                color: message.isOllie
+                                    ? Colors.black.withOpacity(0.1)
+                                    : const Color(0xFFFF8C6B).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: hasImage
+                              ? ClipRRect(
+                                  borderRadius: bubbleRadius,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 260,
+                                        ),
+                                        child: Image.file(
+                                          message.imageFile!,
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
                                         ),
                                       ),
+                                      if (hasCaption)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 10,
+                                          ),
+                                          child: Text(
+                                            message.text,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 15,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (message.replyTo != null)
+                                      _buildReplyQuote(message.replyTo!),
+                                    Text(
+                                      message.text.replaceAll(
+                                        RegExp(r'\n{2,}'),
+                                        '\n',
+                                      ),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        height: 1.4,
+                                      ),
                                     ),
-                                ],
-                              ),
-                            )
-                          : Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (message.replyTo != null)
-                                  _buildReplyQuote(message.replyTo!),
-                                Text(
-                                  message.text.replaceAll(
-                                    RegExp(r'\n{2,}'),
-                                    '\n',
-                                  ),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    height: 1.4,
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                        ),
+                      ),
                     ),
-                  ),
+                    // Speaker only on Ollie messages
+                    if (message.isOllie) ...[
+                      const SizedBox(width: 8),
+                      _buildSpeakerControl(message),
+                    ],
+                  ],
                 ),
-                // Speaker only on Ollie messages
-                if (message.isOllie) ...[
-                  const SizedBox(width: 8),
-                  _buildSpeakerControl(message),
-                ],
+                if (!message.isOllie && message.failed)
+                  _buildFailedIndicator(message),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFailedIndicator(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, right: 4),
+      child: GestureDetector(
+        onTap: () => _retryFailedMessage(message),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 13, color: Colors.red.shade300),
+            const SizedBox(width: 4),
+            Text(
+              'Failed to send · Tap to retry',
+              style: TextStyle(color: Colors.red.shade300, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
