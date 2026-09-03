@@ -66,6 +66,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 'transcribes voice messages, and runs the automatic safety screening.'),
             _bullet('Papla Media — converts Ollie\'s replies to spoken audio for voice features.'),
             _bullet('Twilio — sends the one-time codes used to verify your phone number.'),
+            _bullet('SendGrid — sends the one-time codes used to verify your email address, '
+                'if you sign up or log in with email instead of phone.'),
             _bullet('Google — Play Billing (subscription purchases), Sign-In (if you use it '
                 'to log in), Firebase (push notifications), and AdMob (the optional rewarded '
                 'ads that unlock bonus messages).'),
