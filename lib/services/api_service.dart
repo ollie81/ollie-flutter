@@ -801,15 +801,26 @@ class ApiService {
   // GOOGLE LOGIN
   // ============================================================
 
-  Future<Map<String, dynamic>> googleLogin({required String idToken}) async {
+  Future<Map<String, dynamic>> googleLogin({required String idToken, String? dateOfBirth}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/google'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'id_token': idToken}),
+      body: jsonEncode({
+        'id_token': idToken,
+        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
+      }),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+
+      // A brand-new Google account with no date_of_birth yet -- the
+      // backend hasn't created it and there's nothing to save here.
+      // The caller collects one and calls this again with it.
+      if (data['needs_date_of_birth'] == true) {
+        return data;
+      }
+
       await saveTokens(
         accessToken: data['access_token'],
         refreshToken: data['refresh_token'],
