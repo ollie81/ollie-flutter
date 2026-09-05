@@ -100,18 +100,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
     _phoneNumber = prefs.getString('phoneNumber');
     
     if (isLoggedIn && _phoneNumber != null) {
-      // Save FCM token
-      final fcmToken = await NotificationService.getFCMToken();
-      if (fcmToken != null) {
-        await _api.saveFcmToken(fcmToken);
-      }
+      // Fire-and-forget -- saving the FCM token is best-effort and
+      // must never block getting into the app. This used to be
+      // awaited here, so a slow/hung Firebase or network call (e.g.
+      // right after the phone wakes from sleep, before its radio has
+      // fully reconnected) left the loading screen stuck forever on
+      // every subsequent open, not just the first one.
+      _refreshFcmToken();
     }
-    
+
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
-      
+
       if (isLoggedIn && _phoneNumber != null) {
         Navigator.pushReplacement(
           context,
@@ -119,6 +121,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
         );
         _openChatIfLaunchedFromNotification();
       }
+    }
+  }
+
+  Future<void> _refreshFcmToken() async {
+    final fcmToken = await NotificationService.getFCMToken();
+    if (fcmToken != null) {
+      await _api.saveFcmToken(fcmToken);
     }
   }
 
