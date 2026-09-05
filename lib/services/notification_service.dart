@@ -22,17 +22,31 @@ class NotificationService {
     );
 
     // Handle notifications that arrive while the app is open —
-    // without this, foreground pushes are received but never
-    // shown to the user.
+    // Flutter doesn't show a system banner for foreground FCM
+    // messages the way it does for background/terminated ones, so
+    // without this a foreground push was silently invisible: saved
+    // to the in-app notifications list, but nothing on-screen ever
+    // told the user it arrived.
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       final notification = message.notification;
-      if (notification != null) {
-        // TODO: hook this into your in-app UI (e.g. a snackbar,
-        // or refresh a notifications badge/list) since Flutter
-        // doesn't show a system banner for foreground messages
-        // automatically the way background ones do.
-        print('Foreground notification: ${notification.title} — ${notification.body}');
-      }
+      final context = navigatorKey.currentContext;
+      if (notification == null || context == null) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            notification.body?.isNotEmpty == true
+                ? notification.body!
+                : (notification.title ?? 'New message from Ollie'),
+          ),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: openChatFromNotification,
+          ),
+        ),
+      );
     });
 
     // Tapped while the app was backgrounded (not fully closed).
