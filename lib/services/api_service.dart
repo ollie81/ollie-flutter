@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -8,6 +9,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
   static const String baseUrl = 'https://ollie-api-1-production.up.railway.app';
   static const _storage = FlutterSecureStorage();
+  // No request waited on this long without a response -- without it,
+  // a stale connection (phone waking from sleep, a network handoff)
+  // left every caller awaiting forever, which is what made the app
+  // look permanently stuck loading on open.
+  static const _requestTimeout = Duration(seconds: 15);
 
   // ==========================================================
   // TOKEN STORAGE
@@ -79,7 +85,7 @@ class ApiService {
       Uri.parse('$baseUrl/auth/refresh'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'refresh_token': refreshToken}),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -112,6 +118,12 @@ class ApiService {
       // means every one of them gets a clean message for free
       // instead of a raw "Failed host lookup" string.
       throw Exception('No internet connection. Check your signal and try again.');
+    } on TimeoutException {
+      // The connection was live but nothing ever answered -- e.g.
+      // the phone's radio hasn't fully reconnected after being idle.
+      // Without _requestTimeout on the underlying call, this used to
+      // hang forever instead of ever reaching this catch.
+      throw Exception('Connection timed out. Check your signal and try again.');
     }
   }
 
@@ -129,29 +141,29 @@ class ApiService {
         Uri.parse('$baseUrl$endpoint'),
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
-      );
+      ).timeout(_requestTimeout);
     } else if (method == 'PUT') {
       response = await http.put(
         Uri.parse('$baseUrl$endpoint'),
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
-      );
+      ).timeout(_requestTimeout);
     } else if (method == 'PATCH') {
       response = await http.patch(
         Uri.parse('$baseUrl$endpoint'),
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
-      );
+      ).timeout(_requestTimeout);
     } else if (method == 'DELETE') {
       response = await http.delete(
         Uri.parse('$baseUrl$endpoint'),
         headers: headers,
-      );
+      ).timeout(_requestTimeout);
     } else {
       response = await http.get(
         Uri.parse('$baseUrl$endpoint'),
         headers: headers,
-      );
+      ).timeout(_requestTimeout);
     }
 
     // If token expired — refresh and retry once
@@ -164,29 +176,29 @@ class ApiService {
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
-          );
+          ).timeout(_requestTimeout);
         } else if (method == 'PUT') {
           response = await http.put(
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
-          );
+          ).timeout(_requestTimeout);
         } else if (method == 'PATCH') {
           response = await http.patch(
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
             body: body != null ? jsonEncode(body) : null,
-          );
+          ).timeout(_requestTimeout);
         } else if (method == 'DELETE') {
           response = await http.delete(
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
-          );
+          ).timeout(_requestTimeout);
         } else {
           response = await http.get(
             Uri.parse('$baseUrl$endpoint'),
             headers: newHeaders,
-          );
+          ).timeout(_requestTimeout);
         }
       }
     }
