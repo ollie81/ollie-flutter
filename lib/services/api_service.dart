@@ -14,6 +14,11 @@ class ApiService {
   // left every caller awaiting forever, which is what made the app
   // look permanently stuck loading on open.
   static const _requestTimeout = Duration(seconds: 15);
+  // Voice/image uploads carry a real file over the network on top of
+  // the server's own transcription/processing time, so they get a
+  // longer allowance than a plain JSON request -- 15s would risk
+  // cutting off a slow-but-working upload on a weak connection.
+  static const _uploadTimeout = Duration(seconds: 60);
 
   // ==========================================================
   // TOKEN STORAGE
@@ -207,6 +212,37 @@ class ApiService {
   }
 
   // ============================================================
+  // PUBLIC REQUEST — same timeout + friendly-error handling as
+  // _authRequest, for the pre-auth endpoints (signup, login,
+  // password reset, Google/email variants, ...) that have no token
+  // yet and so can't go through _authRequest's auth headers / 401
+  // retry. Without a shared timeout here, every one of these --
+  // meaning the entire signup and login funnel -- could hang
+  // forever on a stalled connection instead of failing with a
+  // message the user could act on.
+  // ============================================================
+
+  Future<http.Response> _publicRequest({
+    required String method,
+    required String endpoint,
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$endpoint');
+      final headers = {'Content-Type': 'application/json'};
+      if (method == 'POST') {
+        return await http.post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(_requestTimeout);
+      }
+      return await http.get(uri, headers: headers).timeout(_requestTimeout);
+    } on SocketException {
+      throw Exception('No internet connection. Check your signal and try again.');
+    } on TimeoutException {
+      throw Exception('Connection timed out. Check your signal and try again.');
+    }
+  }
+
+  // ============================================================
   // CHAT & VOICE
   // ============================================================
 
@@ -303,7 +339,7 @@ class ApiService {
     request.files.add(
       await http.MultipartFile.fromPath('audio', audioFile.path),
     );
-    return await request.send();
+    return await request.send().timeout(_uploadTimeout);
   }
 
   Future<Map<String, dynamic>> sendVoiceChat(
@@ -486,7 +522,7 @@ class ApiService {
         contentType: _sniffImageMediaType(bytes),
       ),
     );
-    return await request.send();
+    return await request.send().timeout(_uploadTimeout);
   }
 
   Future<Map<String, dynamic>> sendImageMessage(
@@ -566,10 +602,10 @@ class ApiService {
   Future<Map<String, dynamic>> requestSignupOtp({
     required String phoneNumber,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/signup/request-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber}),
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/signup/request-otp',
+      body: {'phone_number': phoneNumber},
     );
 
     if (response.statusCode == 200) {
@@ -586,15 +622,15 @@ class ApiService {
     required String otp,
     String? dateOfBirth,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/signup'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/signup',
+      body: {
         'phone_number': phoneNumber,
         'password': password,
         'otp': otp,
         if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
-      }),
+      },
     );
 
     if (response.statusCode == 200) {
@@ -615,10 +651,10 @@ class ApiService {
     required String phoneNumber,
     required String password,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber, 'password': password}),
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/login',
+      body: {'phone_number': phoneNumber, 'password': password},
     );
 
     if (response.statusCode == 200) {
@@ -639,10 +675,10 @@ class ApiService {
     final refreshToken = await getRefreshToken();
     if (refreshToken != null) {
       try {
-        await http.post(
-          Uri.parse('$baseUrl/auth/logout'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'refresh_token': refreshToken}),
+        await _publicRequest(
+          method: 'POST',
+          endpoint: '/auth/logout',
+          body: {'refresh_token': refreshToken},
         );
       } catch (e) {
         // Ignore logout errors
@@ -655,10 +691,10 @@ class ApiService {
   Future<Map<String, dynamic>> forgotPassword({
     required String phoneNumber,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/forgot'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber}),
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/forgot',
+      body: {'phone_number': phoneNumber},
     );
 
     if (response.statusCode == 200) {
@@ -674,14 +710,14 @@ class ApiService {
     required String otp,
     required String newPassword,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/reset'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/reset',
+      body: {
         'phone_number': phoneNumber,
         'otp': otp,
         'new_password': newPassword,
-      }),
+      },
     );
 
     if (response.statusCode == 200) {
@@ -700,10 +736,10 @@ class ApiService {
   Future<Map<String, dynamic>> emailRequestSignupOtp({
     required String email,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/email/signup/request-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/email/signup/request-otp',
+      body: {'email': email},
     );
 
     if (response.statusCode == 200) {
@@ -720,15 +756,15 @@ class ApiService {
     required String otp,
     String? dateOfBirth,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/email/signup'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/email/signup',
+      body: {
         'email': email,
         'password': password,
         'otp': otp,
         if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
-      }),
+      },
     );
 
     if (response.statusCode == 200) {
@@ -749,10 +785,10 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/email/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/email/login',
+      body: {'email': email, 'password': password},
     );
 
     if (response.statusCode == 200) {
@@ -772,10 +808,10 @@ class ApiService {
   Future<Map<String, dynamic>> emailForgotPassword({
     required String email,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/email/forgot'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/email/forgot',
+      body: {'email': email},
     );
 
     if (response.statusCode == 200) {
@@ -791,14 +827,14 @@ class ApiService {
     required String otp,
     required String newPassword,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/email/reset'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/email/reset',
+      body: {
         'email': email,
         'otp': otp,
         'new_password': newPassword,
-      }),
+      },
     );
 
     if (response.statusCode == 200) {
@@ -814,13 +850,13 @@ class ApiService {
   // ============================================================
 
   Future<Map<String, dynamic>> googleLogin({required String idToken, String? dateOfBirth}) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/google'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _publicRequest(
+      method: 'POST',
+      endpoint: '/auth/google',
+      body: {
         'id_token': idToken,
         if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
-      }),
+      },
     );
 
     if (response.statusCode == 200) {
@@ -892,8 +928,9 @@ class ApiService {
 
   Future<bool> checkUserExists(String phoneNumber) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/auth/check/$phoneNumber'),
+      final response = await _publicRequest(
+        method: 'GET',
+        endpoint: '/auth/check/$phoneNumber',
       );
 
       if (response.statusCode == 200) {
