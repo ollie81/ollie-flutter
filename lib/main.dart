@@ -11,14 +11,14 @@ import 'services/api_service.dart';
 import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 
-// Crash/error reporting. Empty until a real Sentry project exists --
-// paste the DSN here once you have one (a DSN is meant to be public,
-// it only lets events be submitted, not read, so it's fine to
-// hardcode like baseUrl in api_service.dart is). Left empty, _initApp
-// below just runs the app directly with no reporting, same "absent
-// third-party service is a clean no-op" pattern as
+// Crash/error reporting. A DSN is meant to be public -- it only lets
+// events be submitted, not read -- so it's fine to hardcode, same as
+// baseUrl in api_service.dart. If this is ever blanked out again,
+// _initApp below just runs the app directly with no reporting, same
+// "absent third-party service is a clean no-op" pattern as
 // FIREBASE_CREDENTIALS_JSON on the backend.
-const String _sentryDsn = '';
+const String _sentryDsn =
+    'https://711217accc9166852f84382c13c50cd3@o4512024165548032.ingest.us.sentry.io/4512024205393920';
 
 Future<void> _initApp() async {
   WidgetsFlutterBinding.ensureInitialized();
