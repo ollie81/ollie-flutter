@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import 'home_screen.dart';
@@ -13,7 +14,8 @@ enum _PhoneAuthMode { login, signup, forgot }
 // split out of the old single AuthScreen so each sign-in method
 // gets its own focused screen. See auth_screen.dart for the
 // landing screen that leads here, and email_auth_screen.dart for
-// the equivalent email flow.
+// the equivalent email flow (several strings below are shared with
+// that screen's ARB keys where the wording is identical).
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
 
@@ -60,6 +62,8 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     return age;
   }
 
+  // Serializes a date for the backend (auth.py expects YYYY-MM-DD) --
+  // not a display formatter, so it stays locale-independent on purpose.
   String _formatDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -81,10 +85,11 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   // ============================================================
 
   Future<void> _handleSubmit() async {
+    final l10n = AppLocalizations.of(context)!;
     final phone = _fullPhoneNumber;
 
     if (phone.isEmpty) {
-      _showError('Enter phone number');
+      _showError(l10n.phoneAuthEnterPhoneNumber);
       return;
     }
 
@@ -93,36 +98,36 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     try {
       if (_mode == _PhoneAuthMode.login) {
         if (_passwordController.text.isEmpty) {
-          _showError('Enter password');
+          _showError(l10n.emailAuthErrorEnterPassword);
           return;
         }
         await _api.login(phoneNumber: phone, password: _passwordController.text);
         await _saveAndNavigate(phone, isNewUser: false);
       } else if (_mode == _PhoneAuthMode.signup) {
         if (_passwordController.text.length < 6) {
-          _showError('Password must be at least 6 characters');
+          _showError(l10n.emailAuthErrorPasswordTooShort);
           return;
         }
         if (_passwordController.text != _confirmController.text) {
-          _showError('Passwords do not match');
+          _showError(l10n.emailAuthErrorPasswordMismatch);
           return;
         }
         if (_dateOfBirth == null) {
-          _showError('Enter your date of birth');
+          _showError(l10n.emailAuthErrorEnterDob);
           return;
         }
         if (_calculateAge(_dateOfBirth!) < _minSignupAgeYears) {
-          _showError('You must be at least $_minSignupAgeYears years old to create an account');
+          _showError(l10n.authMinAgeRequired(_minSignupAgeYears));
           return;
         }
 
         if (!_signupOtpSent) {
           await _api.requestSignupOtp(phoneNumber: phone);
           setState(() => _signupOtpSent = true);
-          _showSuccess('OTP sent to your phone');
+          _showSuccess(l10n.phoneAuthOtpSent);
         } else {
           if (_signupOtpController.text.trim().isEmpty) {
-            _showError('Enter the OTP sent to your phone');
+            _showError(l10n.phoneAuthEnterOtpSentError);
             return;
           }
           await _api.signup(
@@ -137,14 +142,14 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         if (!_otpSent) {
           await _api.forgotPassword(phoneNumber: phone);
           setState(() => _otpSent = true);
-          _showSuccess('OTP sent to your phone');
+          _showSuccess(l10n.phoneAuthOtpSent);
         } else {
           if (_otpController.text.isEmpty) {
-            _showError('Enter the OTP');
+            _showError(l10n.phoneAuthEnterOtp);
             return;
           }
           if (_passwordController.text.length < 6) {
-            _showError('Password must be at least 6 characters');
+            _showError(l10n.emailAuthErrorPasswordTooShort);
             return;
           }
           await _api.resetPassword(
@@ -152,7 +157,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
             otp: _otpController.text.trim(),
             newPassword: _passwordController.text,
           );
-          _showSuccess('Password reset! Login with new password.');
+          _showSuccess(l10n.emailAuthPasswordResetSuccess);
           setState(() {
             _mode = _PhoneAuthMode.login;
             _otpSent = false;
@@ -247,6 +252,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -275,15 +281,15 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _mode == _PhoneAuthMode.login
-                        ? 'Welcome Back'
-                        : (_mode == _PhoneAuthMode.signup ? 'Create Account' : 'Reset Password'),
+                        ? l10n.emailAuthWelcomeBack
+                        : (_mode == _PhoneAuthMode.signup ? l10n.emailAuthCreateAccount : l10n.emailAuthResetPasswordTitle),
                     style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _mode == _PhoneAuthMode.login
-                        ? 'Sign in with your phone number'
-                        : (_mode == _PhoneAuthMode.signup ? 'Join Ollie today' : 'Enter your phone number'),
+                        ? l10n.phoneAuthSignInSubtitle
+                        : (_mode == _PhoneAuthMode.signup ? l10n.emailAuthJoinSubtitle : l10n.phoneAuthForgotSubtitle),
                     style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
                   ),
                   const SizedBox(height: 32),
@@ -291,7 +297,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   IntlPhoneField(
                     controller: _phoneController,
                     decoration: InputDecoration(
-                      hintText: 'Enter phone number',
+                      hintText: l10n.phoneAuthEnterPhoneNumber,
                       hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.07),
@@ -323,7 +329,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   if (_mode != _PhoneAuthMode.forgot || (_mode == _PhoneAuthMode.forgot && _otpSent)) ...[
                     _buildTextField(
                       controller: _passwordController,
-                      hint: _mode == _PhoneAuthMode.forgot ? 'New password' : 'Password',
+                      hint: _mode == _PhoneAuthMode.forgot ? l10n.emailAuthNewPasswordHint : l10n.emailAuthPasswordHint,
                       icon: Icons.lock,
                       obscure: _obscurePassword,
                       suffixIcon: IconButton(
@@ -341,7 +347,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   if (_mode == _PhoneAuthMode.signup) ...[
                     _buildTextField(
                       controller: _confirmController,
-                      hint: 'Confirm password',
+                      hint: l10n.emailAuthConfirmPasswordHint,
                       icon: Icons.lock_outline,
                       obscure: _obscureConfirm,
                       suffixIcon: IconButton(
@@ -372,7 +378,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                             Icon(Icons.cake_outlined, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
                             const SizedBox(width: 12),
                             Text(
-                              _dateOfBirth == null ? 'Date of birth' : _formatDate(_dateOfBirth!),
+                              _dateOfBirth == null ? l10n.authDateOfBirth : _formatDate(_dateOfBirth!),
                               style: TextStyle(
                                 color: _dateOfBirth == null ? Colors.white.withOpacity(0.3) : Colors.white,
                                 fontSize: 15,
@@ -388,7 +394,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   if (_mode == _PhoneAuthMode.signup && _signupOtpSent) ...[
                     _buildTextField(
                       controller: _signupOtpController,
-                      hint: 'Enter the code sent to your phone',
+                      hint: l10n.phoneAuthEnterCodeSentHint,
                       icon: Icons.pin,
                       keyboardType: TextInputType.number,
                     ),
@@ -398,7 +404,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   if (_mode == _PhoneAuthMode.forgot && _otpSent) ...[
                     _buildTextField(
                       controller: _otpController,
-                      hint: 'Enter OTP',
+                      hint: l10n.phoneAuthOtpHint,
                       icon: Icons.pin,
                       keyboardType: TextInputType.number,
                     ),
@@ -435,10 +441,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                             )
                           : Text(
                               _mode == _PhoneAuthMode.login
-                                  ? 'Sign In'
+                                  ? l10n.emailAuthSignIn
                                   : (_mode == _PhoneAuthMode.signup
-                                      ? (_signupOtpSent ? 'Verify & Create Account' : 'Send OTP')
-                                      : (_otpSent ? 'Reset Password' : 'Send OTP')),
+                                      ? (_signupOtpSent ? l10n.emailAuthVerifyAndCreateAccount : l10n.phoneAuthSendOtp)
+                                      : (_otpSent ? l10n.emailAuthResetPasswordTitle : l10n.phoneAuthSendOtp)),
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
                             ),
@@ -451,7 +457,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _mode == _PhoneAuthMode.login ? "Don't have an account?" : "Already have an account?",
+                          _mode == _PhoneAuthMode.login ? l10n.emailAuthNoAccount : l10n.emailAuthHaveAccount,
                           style: TextStyle(color: Colors.white.withOpacity(0.5)),
                         ),
                         TextButton(
@@ -466,7 +472,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                             });
                           },
                           child: Text(
-                            _mode == _PhoneAuthMode.login ? 'Sign Up' : 'Sign In',
+                            _mode == _PhoneAuthMode.login ? l10n.emailAuthSignUp : l10n.emailAuthSignIn,
                             style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -484,7 +490,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                             _passwordController.clear();
                           });
                         },
-                        child: Text('Forgot password?', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                        child: Text(l10n.emailAuthForgotPassword, style: TextStyle(color: Colors.white.withOpacity(0.5))),
                       ),
                     ),
 
@@ -499,7 +505,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                             _passwordController.clear();
                           });
                         },
-                        child: Text('Back to Login', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                        child: Text(l10n.emailAuthBackToLogin, style: TextStyle(color: Colors.white.withOpacity(0.5))),
                       ),
                     ),
                   const SizedBox(height: 40),

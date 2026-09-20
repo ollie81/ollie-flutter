@@ -1,47 +1,20 @@
 import 'package:flutter/material.dart';
+import '../l10n/generated/app_localizations.dart';
 import 'chat_screen.dart';
 
 // "Do It With Me" -- picking one of these opens Ollie in that mode:
 // it shapes HOW Ollie helps (guiding step-by-step, asking what
 // you're working on) for the rest of that chat, and Ollie speaks
 // first instead of waiting for you to explain. See the backend's
-// modes.py for the matching keys/labels.
+// modes.py for the matching keys/labels. Labels/descriptions are
+// looked up by key at build time (via _modeLabel/_modeDescription)
+// rather than stored in _modeKeys, since a static const list can't
+// hold context-dependent localized strings.
 class DoItWithMeScreen extends StatelessWidget {
   final String phoneNumber;
   const DoItWithMeScreen({super.key, required this.phoneNumber});
 
-  static const List<Map<String, String>> _modes = [
-    {
-      'key': 'study',
-      'label': 'Study Together',
-      'description': 'Break it into steps, quiz you along the way',
-    },
-    {
-      'key': 'build',
-      'label': 'Build Together',
-      'description': 'Work through your project one step at a time',
-    },
-    {
-      'key': 'plan_day',
-      'label': 'Plan My Day',
-      'description': 'Turn today into a short, realistic plan',
-    },
-    {
-      'key': 'learn',
-      'label': 'Learn Together',
-      'description': 'Explain a topic interactively, piece by piece',
-    },
-    {
-      'key': 'practice',
-      'label': 'Practice',
-      'description': 'Interview, presentation, hard conversation — run through it',
-    },
-    {
-      'key': 'brainstorm',
-      'label': 'Brainstorm',
-      'description': 'Build ideas together, no generic suggestions',
-    },
-  ];
+  static const List<String> _modeKeys = ['study', 'build', 'plan_day', 'learn', 'practice', 'brainstorm'];
 
   static const List<IconData> _icons = [
     Icons.school_outlined,
@@ -51,6 +24,44 @@ class DoItWithMeScreen extends StatelessWidget {
     Icons.mic_none_outlined,
     Icons.lightbulb_outline,
   ];
+
+  String _modeLabel(AppLocalizations l10n, String key) {
+    switch (key) {
+      case 'study':
+        return l10n.doItModeStudyLabel;
+      case 'build':
+        return l10n.doItModeBuildLabel;
+      case 'plan_day':
+        return l10n.doItModePlanDayLabel;
+      case 'learn':
+        return l10n.doItModeLearnLabel;
+      case 'practice':
+        return l10n.doItModePracticeLabel;
+      case 'brainstorm':
+        return l10n.doItModeBrainstormLabel;
+      default:
+        return key;
+    }
+  }
+
+  String _modeDescription(AppLocalizations l10n, String key) {
+    switch (key) {
+      case 'study':
+        return l10n.doItModeStudyDescription;
+      case 'build':
+        return l10n.doItModeBuildDescription;
+      case 'plan_day':
+        return l10n.doItModePlanDayDescription;
+      case 'learn':
+        return l10n.doItModeLearnDescription;
+      case 'practice':
+        return l10n.doItModePracticeDescription;
+      case 'brainstorm':
+        return l10n.doItModeBrainstormDescription;
+      default:
+        return '';
+    }
+  }
 
   void _startMode(BuildContext context, String mode, String label) {
     Navigator.pushReplacement(
@@ -67,6 +78,7 @@ class DoItWithMeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -93,9 +105,9 @@ class DoItWithMeScreen extends StatelessWidget {
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
-                    const Text(
-                      'Do It With Me',
-                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+                    Text(
+                      l10n.doItWithMeTitle,
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),
@@ -103,17 +115,17 @@ class DoItWithMeScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
                 child: Text(
-                  "Let's do this together, not just talk about it",
+                  l10n.doItWithMeSubtitle,
                   style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
                 ),
               ),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  itemCount: _modes.length,
+                  itemCount: _modeKeys.length,
                   itemBuilder: (context, index) {
-                    final mode = _modes[index];
-                    return _modeCard(context, _icons[index], mode['label']!, mode['description']!, mode['key']!);
+                    final key = _modeKeys[index];
+                    return _modeCard(context, _icons[index], _modeLabel(l10n, key), _modeDescription(l10n, key), key);
                   },
                 ),
               ),

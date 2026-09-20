@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 
 // "Our Space" -- the shared history between Ollie and the user.
 // Shows the relationship stage (never a streak -- see the backend's
 // relationship.py for why) plus goals worked on, accomplishments,
-// and moments worth looking back on.
+// and moments worth looking back on. stage_label comes straight from
+// the backend and isn't localized here (same scoping as the web
+// app's OurSpace.tsx port).
 class OurSpaceScreen extends StatefulWidget {
   const OurSpaceScreen({super.key});
 
@@ -16,7 +19,10 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
   final ApiService _api = ApiService();
 
   bool _loading = true;
-  String? _error;
+  // The localized error message is built in _buildBody (from this
+  // flag), not stored here -- AppLocalizations.of(context) isn't
+  // safe to call from initState's synchronous call into _loadJourney.
+  bool _hasError = false;
   Map<String, dynamic>? _journey;
 
   @override
@@ -28,7 +34,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
   Future<void> _loadJourney() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _hasError = false;
     });
     try {
       final journey = await _api.getJourney();
@@ -40,7 +46,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load your journey, try again';
+        _hasError = true;
         _loading = false;
       });
     }
@@ -48,6 +54,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -65,8 +72,8 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(),
-              Expanded(child: _buildBody()),
+              _buildAppBar(l10n),
+              Expanded(child: _buildBody(l10n)),
             ],
           ),
         ),
@@ -74,7 +81,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
     );
   }
 
-  Widget _buildAppBar() {
+  Widget _buildAppBar(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
       child: Row(
@@ -83,30 +90,30 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
-          const Text(
-            'Our Space',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+          Text(
+            l10n.ourSpaceTitle,
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppLocalizations l10n) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFFFF8C6B)));
     }
 
-    if (_error != null) {
+    if (_hasError) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            Text(l10n.ourSpaceLoadError, style: TextStyle(color: Colors.white.withOpacity(0.6))),
             const SizedBox(height: 12),
             TextButton(
               onPressed: _loadJourney,
-              child: const Text('Retry', style: TextStyle(color: Color(0xFFFF8C6B))),
+              child: Text(l10n.commonRetry, style: const TextStyle(color: Color(0xFFFF8C6B))),
             ),
           ],
         ),
@@ -129,23 +136,23 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
-          _stageHero(journey),
+          _stageHero(l10n, journey),
           const SizedBox(height: 24),
           if (isEmpty)
-            _emptyState()
+            _emptyState(l10n)
           else ...[
             if (activeGoals.isNotEmpty) ...[
-              _sectionHeader("Working on together"),
+              _sectionHeader(l10n.ourSpaceWorkingTogether),
               ...activeGoals.map((g) => _goalTile(g, done: false)),
             ],
             if (completedGoals.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _sectionHeader("What you've accomplished"),
+              _sectionHeader(l10n.ourSpaceAccomplished),
               ...completedGoals.map((g) => _goalTile(g, done: true)),
             ],
             if (highlights.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _sectionHeader('Moments'),
+              _sectionHeader(l10n.ourSpaceMoments),
               ...highlights.map((m) => _highlightTile(m)),
             ],
           ],
@@ -154,7 +161,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
     );
   }
 
-  Widget _stageHero(Map<String, dynamic> journey) {
+  Widget _stageHero(AppLocalizations l10n, Map<String, dynamic> journey) {
     final emoji = journey['stage_emoji'] ?? '🌱';
     final label = journey['stage_label'] ?? 'New';
     final activeDays = journey['active_days'] ?? 0;
@@ -184,9 +191,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            activeDays == 0
-                ? 'Your story with Ollie is just getting started'
-                : '$activeDays ${activeDays == 1 ? 'day' : 'days'} together · $memoryCount things Ollie remembers',
+            activeDays == 0 ? l10n.ourSpaceStoryStarting : l10n.ourSpaceDaysTogether(activeDays, memoryCount),
             style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 13),
             textAlign: TextAlign.center,
           ),
@@ -195,7 +200,7 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
@@ -203,12 +208,12 @@ class _OurSpaceScreenState extends State<OurSpaceScreen> {
           Icon(Icons.auto_awesome_outlined, color: Colors.white.withOpacity(0.25), size: 44),
           const SizedBox(height: 16),
           Text(
-            'Nothing here yet',
+            l10n.ourSpaceNothingYet,
             style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
-            'Keep talking to Ollie — your memories, goals, and\nmilestones together will start showing up here.',
+            l10n.ourSpaceNothingYetDescription,
             style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
             textAlign: TextAlign.center,
           ),

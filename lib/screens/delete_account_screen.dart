@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import 'auth_screen.dart';
 
@@ -12,6 +14,11 @@ import 'auth_screen.dart';
 // POST /settings/delete-account) -- logging back in during that
 // window restores the account automatically, no separate "undo"
 // flow needed here.
+//
+// _confirmationPhrase stays the literal English word "DELETE" in
+// every language -- settings.py's DELETE_ACCOUNT_CONFIRMATION_PHRASE
+// is a fixed backend constant, so translating it would silently
+// break the confirmation check.
 class DeleteAccountScreen extends StatefulWidget {
   const DeleteAccountScreen({super.key});
 
@@ -51,14 +58,10 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     }
   }
 
-  String _formatDate(String iso) {
+  String _formatDate(BuildContext context, String iso) {
     final date = DateTime.tryParse(iso)?.toLocal();
-    if (date == null) return 'in 14 days';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    if (date == null) return AppLocalizations.of(context)!.deleteAccountInFourteenDays;
+    return DateFormat.yMMMd(Localizations.localeOf(context).toString()).format(date);
   }
 
   Future<void> _submit() async {
@@ -67,6 +70,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     try {
       final scheduledFor = await _api.requestAccountDeletion();
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
 
       await showDialog(
         context: context,
@@ -74,19 +78,18 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         builder: (context) => AlertDialog(
           backgroundColor: const Color(0xFF1A1035),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
-            'Account scheduled for deletion',
-            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
+          title: Text(
+            l10n.deleteAccountScheduledTitle,
+            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
           ),
           content: Text(
-            "Everything will be permanently deleted on ${_formatDate(scheduledFor)}. "
-            "Changed your mind? Just log back in before then and it's restored automatically.",
+            l10n.deleteAccountScheduledBody(_formatDate(context, scheduledFor)),
             style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14, height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
+              child: Text(l10n.commonOk, style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -112,6 +115,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -124,7 +128,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildHeader(),
+              _buildHeader(l10n),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -133,35 +137,34 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                     children: [
                       _buildWarningIcon(),
                       const SizedBox(height: 20),
-                      const Text(
-                        "This isn't reversible after 14 days",
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      Text(
+                        l10n.deleteAccountNotReversible,
+                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Deleting your account permanently removes:',
+                        l10n.deleteAccountRemovesIntro,
                         style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
                       ),
                       const SizedBox(height: 12),
-                      _buildLossItem('Every conversation with Ollie'),
-                      _buildLossItem("Everything Ollie's learned about you"),
-                      _buildLossItem('Your streak and relationship journey'),
+                      _buildLossItem(l10n.deleteAccountLossConversations),
+                      _buildLossItem(l10n.deleteAccountLossMemory),
+                      _buildLossItem(l10n.deleteAccountLossStreak),
                       const SizedBox(height: 20),
                       _buildInfoCard(
                         icon: Icons.schedule_rounded,
-                        text: "You'll have 14 days to change your mind — just log back in during "
-                            "that window and your account, with everything in it, comes right back.",
+                        text: l10n.deleteAccountGracePeriodInfo,
                       ),
                       const SizedBox(height: 12),
                       _buildInfoCard(
                         icon: Icons.payment_rounded,
-                        text: 'This does NOT cancel an active Play Store subscription — cancel that separately first.',
-                        actionLabel: 'Open Play Store subscriptions',
+                        text: l10n.deleteAccountSubscriptionInfo,
+                        actionLabel: l10n.deleteAccountOpenSubscriptions,
                         onAction: _openSubscriptions,
                       ),
                       const SizedBox(height: 28),
                       Text(
-                        'Type "$_confirmationPhrase" to confirm',
+                        l10n.deleteAccountTypeToConfirm(_confirmationPhrase),
                         style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 10),
@@ -202,7 +205,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                                 )
                               : Text(
-                                  'Delete my account',
+                                  l10n.deleteAccountConfirmButton,
                                   style: TextStyle(
                                     color: _canDelete ? Colors.white : Colors.white.withOpacity(0.4),
                                     fontWeight: FontWeight.w600,
@@ -222,7 +225,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
@@ -231,9 +234,9 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
             icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
             onPressed: _isDeleting ? null : () => Navigator.pop(context),
           ),
-          const Text(
-            'Delete Account',
-            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
+          Text(
+            l10n.deleteAccountTitle,
+            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
           ),
         ],
       ),

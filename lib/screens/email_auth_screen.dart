@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import 'home_screen.dart';
@@ -45,6 +46,8 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     return age;
   }
 
+  // Serializes a date for the backend (auth.py expects YYYY-MM-DD) --
+  // not a display formatter, so it stays locale-independent on purpose.
   String _formatDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -70,14 +73,15 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
   // ============================================================
 
   Future<void> _handleSubmit() async {
+    final l10n = AppLocalizations.of(context)!;
     final email = _emailController.text.trim().toLowerCase();
 
     if (email.isEmpty) {
-      _showError('Enter your email');
+      _showError(l10n.emailAuthErrorEnterEmail);
       return;
     }
     if (!_isValidEmail(email)) {
-      _showError('Enter a valid email address');
+      _showError(l10n.emailAuthErrorInvalidEmail);
       return;
     }
 
@@ -86,36 +90,36 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     try {
       if (_mode == _EmailAuthMode.login) {
         if (_passwordController.text.isEmpty) {
-          _showError('Enter password');
+          _showError(l10n.emailAuthErrorEnterPassword);
           return;
         }
         await _api.emailLogin(email: email, password: _passwordController.text);
         await _saveAndNavigate(email, isNewUser: false);
       } else if (_mode == _EmailAuthMode.signup) {
         if (_passwordController.text.length < 6) {
-          _showError('Password must be at least 6 characters');
+          _showError(l10n.emailAuthErrorPasswordTooShort);
           return;
         }
         if (_passwordController.text != _confirmController.text) {
-          _showError('Passwords do not match');
+          _showError(l10n.emailAuthErrorPasswordMismatch);
           return;
         }
         if (_dateOfBirth == null) {
-          _showError('Enter your date of birth');
+          _showError(l10n.emailAuthErrorEnterDob);
           return;
         }
         if (_calculateAge(_dateOfBirth!) < _minSignupAgeYears) {
-          _showError('You must be at least $_minSignupAgeYears years old to create an account');
+          _showError(l10n.authMinAgeRequired(_minSignupAgeYears));
           return;
         }
 
         if (!_signupOtpSent) {
           await _api.emailRequestSignupOtp(email: email);
           setState(() => _signupOtpSent = true);
-          _showSuccess('Code sent to your email');
+          _showSuccess(l10n.emailAuthCodeSent);
         } else {
           if (_signupOtpController.text.trim().isEmpty) {
-            _showError('Enter the code sent to your email');
+            _showError(l10n.emailAuthEnterCodeSentHint);
             return;
           }
           await _api.emailSignup(
@@ -130,14 +134,14 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         if (!_otpSent) {
           await _api.emailForgotPassword(email: email);
           setState(() => _otpSent = true);
-          _showSuccess('Code sent to your email');
+          _showSuccess(l10n.emailAuthCodeSent);
         } else {
           if (_otpController.text.isEmpty) {
-            _showError('Enter the code');
+            _showError(l10n.emailAuthErrorEnterCode);
             return;
           }
           if (_passwordController.text.length < 6) {
-            _showError('Password must be at least 6 characters');
+            _showError(l10n.emailAuthErrorPasswordTooShort);
             return;
           }
           await _api.emailResetPassword(
@@ -145,7 +149,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
             otp: _otpController.text.trim(),
             newPassword: _passwordController.text,
           );
-          _showSuccess('Password reset! Login with new password.');
+          _showSuccess(l10n.emailAuthPasswordResetSuccess);
           setState(() {
             _mode = _EmailAuthMode.login;
             _otpSent = false;
@@ -240,6 +244,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -268,22 +273,22 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _mode == _EmailAuthMode.login
-                        ? 'Welcome Back'
-                        : (_mode == _EmailAuthMode.signup ? 'Create Account' : 'Reset Password'),
+                        ? l10n.emailAuthWelcomeBack
+                        : (_mode == _EmailAuthMode.signup ? l10n.emailAuthCreateAccount : l10n.emailAuthResetPasswordTitle),
                     style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _mode == _EmailAuthMode.login
-                        ? 'Sign in with your email'
-                        : (_mode == _EmailAuthMode.signup ? 'Join Ollie today' : 'Enter your email'),
+                        ? l10n.emailAuthSignInSubtitle
+                        : (_mode == _EmailAuthMode.signup ? l10n.emailAuthJoinSubtitle : l10n.emailAuthForgotSubtitle),
                     style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
                   ),
                   const SizedBox(height: 32),
 
                   _buildTextField(
                     controller: _emailController,
-                    hint: 'Enter your email',
+                    hint: l10n.emailAuthEmailHint,
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
                   ),
@@ -292,7 +297,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   if (_mode != _EmailAuthMode.forgot || (_mode == _EmailAuthMode.forgot && _otpSent)) ...[
                     _buildTextField(
                       controller: _passwordController,
-                      hint: _mode == _EmailAuthMode.forgot ? 'New password' : 'Password',
+                      hint: _mode == _EmailAuthMode.forgot ? l10n.emailAuthNewPasswordHint : l10n.emailAuthPasswordHint,
                       icon: Icons.lock,
                       obscure: _obscurePassword,
                       suffixIcon: IconButton(
@@ -310,7 +315,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   if (_mode == _EmailAuthMode.signup) ...[
                     _buildTextField(
                       controller: _confirmController,
-                      hint: 'Confirm password',
+                      hint: l10n.emailAuthConfirmPasswordHint,
                       icon: Icons.lock_outline,
                       obscure: _obscureConfirm,
                       suffixIcon: IconButton(
@@ -341,7 +346,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             Icon(Icons.cake_outlined, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
                             const SizedBox(width: 12),
                             Text(
-                              _dateOfBirth == null ? 'Date of birth' : _formatDate(_dateOfBirth!),
+                              _dateOfBirth == null ? l10n.authDateOfBirth : _formatDate(_dateOfBirth!),
                               style: TextStyle(
                                 color: _dateOfBirth == null ? Colors.white.withOpacity(0.3) : Colors.white,
                                 fontSize: 15,
@@ -357,7 +362,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   if (_mode == _EmailAuthMode.signup && _signupOtpSent) ...[
                     _buildTextField(
                       controller: _signupOtpController,
-                      hint: 'Enter the code sent to your email',
+                      hint: l10n.emailAuthEnterCodeSentHint,
                       icon: Icons.pin,
                       keyboardType: TextInputType.number,
                     ),
@@ -367,7 +372,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   if (_mode == _EmailAuthMode.forgot && _otpSent) ...[
                     _buildTextField(
                       controller: _otpController,
-                      hint: 'Enter the code sent to your email',
+                      hint: l10n.emailAuthEnterCodeSentHint,
                       icon: Icons.pin,
                       keyboardType: TextInputType.number,
                     ),
@@ -404,10 +409,10 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             )
                           : Text(
                               _mode == _EmailAuthMode.login
-                                  ? 'Sign In'
+                                  ? l10n.emailAuthSignIn
                                   : (_mode == _EmailAuthMode.signup
-                                      ? (_signupOtpSent ? 'Verify & Create Account' : 'Send Code')
-                                      : (_otpSent ? 'Reset Password' : 'Send Code')),
+                                      ? (_signupOtpSent ? l10n.emailAuthVerifyAndCreateAccount : l10n.emailAuthSendCode)
+                                      : (_otpSent ? l10n.emailAuthResetPasswordTitle : l10n.emailAuthSendCode)),
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
                             ),
@@ -420,7 +425,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _mode == _EmailAuthMode.login ? "Don't have an account?" : "Already have an account?",
+                          _mode == _EmailAuthMode.login ? l10n.emailAuthNoAccount : l10n.emailAuthHaveAccount,
                           style: TextStyle(color: Colors.white.withOpacity(0.5)),
                         ),
                         TextButton(
@@ -435,7 +440,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             });
                           },
                           child: Text(
-                            _mode == _EmailAuthMode.login ? 'Sign Up' : 'Sign In',
+                            _mode == _EmailAuthMode.login ? l10n.emailAuthSignUp : l10n.emailAuthSignIn,
                             style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -453,7 +458,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             _passwordController.clear();
                           });
                         },
-                        child: Text('Forgot password?', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                        child: Text(l10n.emailAuthForgotPassword, style: TextStyle(color: Colors.white.withOpacity(0.5))),
                       ),
                     ),
 
@@ -468,7 +473,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             _passwordController.clear();
                           });
                         },
-                        child: Text('Back to Login', style: TextStyle(color: Colors.white.withOpacity(0.5))),
+                        child: Text(l10n.emailAuthBackToLogin, style: TextStyle(color: Colors.white.withOpacity(0.5))),
                       ),
                     ),
                   const SizedBox(height: 40),

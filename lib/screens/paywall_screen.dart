@@ -2,37 +2,26 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/purchase_service.dart';
 
+// Title/subtitle for each tier are looked up by productId at build
+// time (_tierTitle/_tierSubtitle) rather than stored on _Tier, since
+// a top-level const list can't hold context-dependent localized
+// strings. fallbackPrice stays a plain literal -- it's only ever
+// shown for the brief moment before the real, already
+// locale-formatted price loads from the store.
 class _Tier {
   final String productId;
-  final String title;
   final String fallbackPrice;
-  final String subtitle;
   final bool isRecommended;
-  const _Tier(this.productId, this.title, this.fallbackPrice, this.subtitle, {this.isRecommended = false});
+  const _Tier(this.productId, this.fallbackPrice, {this.isRecommended = false});
 }
 
 const _tiers = [
-  _Tier(
-    PurchaseService.monthlyId,
-    'Monthly',
-    '\$9.99/mo',
-    'Unlimited messages, voice with Ollie, no ads',
-  ),
-  _Tier(
-    PurchaseService.yearlyId,
-    'Yearly',
-    '\$89.99/yr',
-    'Best value — about 25% less than paying monthly',
-    isRecommended: true,
-  ),
-  _Tier(
-    PurchaseService.lifetimeId,
-    'Lifetime',
-    '\$249.99 once',
-    'Pay once, premium forever',
-  ),
+  _Tier(PurchaseService.monthlyId, '\$9.99/mo'),
+  _Tier(PurchaseService.yearlyId, '\$89.99/yr', isRecommended: true),
+  _Tier(PurchaseService.lifetimeId, '\$249.99 once'),
 ];
 
 class PaywallScreen extends StatefulWidget {
@@ -56,6 +45,18 @@ class _PaywallScreenState extends State<PaywallScreen> {
   // then fail to activate anything -- so block it here rather than
   // ship that. Remove this once the backend can verify Apple receipts.
   bool get _iosNotYetSupported => Platform.isIOS;
+
+  String _tierTitle(AppLocalizations l10n, _Tier tier) {
+    if (tier.productId == PurchaseService.monthlyId) return l10n.paywallMonthlyTitle;
+    if (tier.productId == PurchaseService.yearlyId) return l10n.paywallYearlyTitle;
+    return l10n.paywallLifetimeTitle;
+  }
+
+  String _tierSubtitle(AppLocalizations l10n, _Tier tier) {
+    if (tier.productId == PurchaseService.monthlyId) return l10n.paywallMonthlySubtitle;
+    if (tier.productId == PurchaseService.yearlyId) return l10n.paywallYearlySubtitle;
+    return l10n.paywallLifetimeSubtitle;
+  }
 
   @override
   void initState() {
@@ -97,6 +98,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   void _onPurchaseUiEvent(PurchaseUiEvent event) {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     switch (event.status) {
       case PurchaseUiStatus.pending:
         setState(() => _busy = true);
@@ -104,9 +106,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
       case PurchaseUiStatus.success:
         setState(() => _busy = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("you're premium now — welcome"),
-            backgroundColor: Color(0xFF43A047),
+          SnackBar(
+            content: Text(l10n.paywallPurchaseSuccess),
+            backgroundColor: const Color(0xFF43A047),
           ),
         );
         Navigator.pop(context, true);
@@ -115,7 +117,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         setState(() => _busy = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(event.message ?? 'Something went wrong with that purchase'),
+            content: Text(event.message ?? l10n.paywallPurchaseError),
             backgroundColor: const Color(0xFFE53935),
           ),
         );
@@ -136,7 +138,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not start purchase: $e'), backgroundColor: const Color(0xFFE53935)),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.paywallPurchaseStartError(e.toString())),
+          backgroundColor: const Color(0xFFE53935),
+        ),
       );
     }
   }
@@ -149,28 +154,32 @@ class _PaywallScreenState extends State<PaywallScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not restore purchases: $e'), backgroundColor: const Color(0xFFE53935)),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.paywallRestoreError(e.toString())),
+          backgroundColor: const Color(0xFFE53935),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F1A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Ollie Premium', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.paywallTitle, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF8C6B)))
           : _iosNotYetSupported
-              ? _buildMessage("premium on iOS is coming soon — for now, premium is available on Android")
+              ? _buildMessage(l10n.paywalliOSComingSoon)
               : !_storeAvailable
-                  ? _buildMessage("purchases aren't available on this device right now")
-                  : _buildTiers(),
+                  ? _buildMessage(l10n.paywallStoreUnavailable)
+                  : _buildTiers(l10n),
     );
   }
 
@@ -187,20 +196,20 @@ class _PaywallScreenState extends State<PaywallScreen> {
     );
   }
 
-  Widget _buildTiers() {
+  Widget _buildTiers(AppLocalizations l10n) {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         const Icon(Icons.workspace_premium_outlined, color: Color(0xFFFF8C6B), size: 40),
         const SizedBox(height: 12),
-        const Text(
-          'unlimited messages, real voice conversations, no ads',
+        Text(
+          l10n.paywallHeadline,
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 24),
         for (final tier in _tiers) ...[
-          _tierCard(tier),
+          _tierCard(l10n, tier),
           const SizedBox(height: 12),
         ],
         const SizedBox(height: 12),
@@ -208,7 +217,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
           child: TextButton(
             onPressed: _busy ? null : _restore,
             child: Text(
-              'restore purchases',
+              l10n.paywallRestorePurchases,
               style: TextStyle(color: Colors.white.withOpacity(0.6)),
             ),
           ),
@@ -217,7 +226,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     );
   }
 
-  Widget _tierCard(_Tier tier) {
+  Widget _tierCard(AppLocalizations l10n, _Tier tier) {
     final product = _products[tier.productId];
     final available = product != null;
     final price = product?.price ?? tier.fallbackPrice;
@@ -252,7 +261,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 Row(
                   children: [
                     Text(
-                      tier.title,
+                      _tierTitle(l10n, tier),
                       style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(width: 8),
@@ -264,7 +273,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  available ? tier.subtitle : 'not available yet',
+                  available ? _tierSubtitle(l10n, tier) : l10n.paywallNotAvailableYet,
                   style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12.5),
                 ),
               ],
@@ -285,7 +294,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : const Text('go', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                : Text(l10n.paywallGo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -306,9 +315,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
               gradient: const LinearGradient(colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)]),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              'BEST VALUE',
-              style: TextStyle(
+            child: Text(
+              l10n.paywallBestValueBadge,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 10,
                 fontWeight: FontWeight.w700,

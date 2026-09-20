@@ -9,6 +9,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import 'paywall_screen.dart';
 import 'notifications_screen.dart';
@@ -102,7 +103,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       false; // true while a recorded message is uploading/processing
   bool _recorderInitialized = false;
   DateTime? _recordingStartedAt;
-  String _emotionalHeader = "hey there 😊";
+  // Null means "show the default mood line" -- resolved from
+  // AppLocalizations at build time (see _buildEmotionalHeader)
+  // rather than defaulted here, since a field initializer runs
+  // before this widget has a BuildContext to look up.
+  String? _emotionalHeader;
   int _currentStreak = 0;
   int _unreadNotifications = 0;
   late String? _activeMode = widget.initialMode;
@@ -344,21 +349,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
   }
 
+  // English-only keyword matching: harmless in any language (a
+  // reply in another language just always falls through to the
+  // default mood line, same as a neutral English reply would).
   void _updateEmotionalHeader(String message) {
+    final l10n = AppLocalizations.of(context)!;
     if (message.contains("sad") ||
         message.contains("bad") ||
         message.contains("cry")) {
-      setState(() => _emotionalHeader = "im here 🤗");
+      setState(() => _emotionalHeader = l10n.chatMoodSad);
     } else if (message.contains("happy") ||
         message.contains("good") ||
         message.contains("great")) {
-      setState(() => _emotionalHeader = "let's gooo 🎉");
+      setState(() => _emotionalHeader = l10n.chatMoodHappy);
     } else if (message.contains("love") || message.contains("crush")) {
-      setState(() => _emotionalHeader = "awww 💕");
+      setState(() => _emotionalHeader = l10n.chatMoodLove);
     } else if (message.isEmpty) {
-      setState(() => _emotionalHeader = "hey there 😊");
+      setState(() => _emotionalHeader = l10n.chatMoodDefault);
     } else {
-      setState(() => _emotionalHeader = "always listening 💡");
+      setState(() => _emotionalHeader = l10n.chatMoodListening);
     }
   }
 
@@ -487,7 +496,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Copied to clipboard'),
+        content: Text(AppLocalizations.of(context)!.chatCopiedToClipboard),
         backgroundColor: const Color(0xFF1A1035),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -527,7 +536,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 if (canReply)
                   _buildAttachmentOption(
                     icon: Icons.reply_rounded,
-                    label: 'Reply',
+                    label: AppLocalizations.of(context)!.chatReply,
                     onTap: () {
                       Navigator.pop(context);
                       _startReply(message);
@@ -537,7 +546,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 if (canCopy)
                   _buildAttachmentOption(
                     icon: Icons.copy_rounded,
-                    label: 'Copy',
+                    label: AppLocalizations.of(context)!.chatCopy,
                     onTap: () {
                       Navigator.pop(context);
                       _copyMessage(message);
@@ -565,7 +574,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _scrollToMessage(String id) {
     final ctx = _messageKeys[id]?.currentContext;
     if (ctx == null) {
-      _showError("That message isn't loaded in this chat right now");
+      _showError(AppLocalizations.of(context)!.chatMessageNotLoaded);
       return;
     }
     Scrollable.ensureVisible(
@@ -629,8 +638,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                "you're out of free messages for today",
+              Text(
+                AppLocalizations.of(context)!.chatOutOfFreeMessages,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -640,7 +649,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 8),
               Text(
-                "watch a quick ad for 10 more minutes with ollie",
+                AppLocalizations.of(context)!.chatWatchAdSubtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
@@ -662,8 +671,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     Navigator.pop(context);
                     _watchAdForBonus(pendingMessage);
                   },
-                  child: const Text(
-                    'watch ad for 10 more minutes',
+                  child: Text(
+                    AppLocalizations.of(context)!.chatWatchAdButton,
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -678,7 +687,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   _openPaywall();
                 },
                 child: Text(
-                  'or subscribe for unlimited messages',
+                  AppLocalizations.of(context)!.chatSubscribeUnlimited,
                   style: TextStyle(color: Colors.white.withOpacity(0.7)),
                 ),
               ),
@@ -691,7 +700,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   void _watchAdForBonus(String pendingMessage) {
     if (_rewardedAd == null) {
-      _showError("ad not ready yet — try again in a moment");
+      _showError(AppLocalizations.of(context)!.chatAdNotReady);
       _loadRewardedAd();
       return;
     }
@@ -704,7 +713,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();
         _loadRewardedAd();
-        _showError("couldn't show ad, try again");
+        _showError(AppLocalizations.of(context)!.chatAdShowFailed);
       },
     );
 
@@ -715,7 +724,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           setState(() => _isTyping = true);
           await _requestOllieReply(pendingMessage);
         } catch (e) {
-          _showError("couldn't unlock bonus messages, try again");
+          _showError(AppLocalizations.of(context)!.chatAdBonusFailed);
         }
       },
     );
@@ -751,7 +760,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 const SizedBox(height: 20),
                 _buildAttachmentOption(
                   icon: Icons.camera_alt_rounded,
-                  label: 'Take a photo',
+                  label: AppLocalizations.of(context)!.chatTakePhoto,
                   onTap: () {
                     Navigator.pop(context);
                     _pickAndPreviewImage(ImageSource.camera);
@@ -760,7 +769,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 const SizedBox(height: 10),
                 _buildAttachmentOption(
                   icon: Icons.photo_library_rounded,
-                  label: 'Choose from gallery',
+                  label: AppLocalizations.of(context)!.chatChooseFromGallery,
                   onTap: () {
                     Navigator.pop(context);
                     _pickAndPreviewImage(ImageSource.gallery);
@@ -827,7 +836,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _showImagePreviewSheet(File(picked.path));
     } catch (e) {
       _showError(
-        'Could not access ${source == ImageSource.camera ? 'the camera' : 'your photos'}',
+        source == ImageSource.camera
+            ? AppLocalizations.of(context)!.chatCouldNotAccessCamera
+            : AppLocalizations.of(context)!.chatCouldNotAccessPhotos,
       );
     }
   }
@@ -882,7 +893,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       controller: captionController,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Add a caption (optional)',
+                        hintText: AppLocalizations.of(context)!.chatAddCaptionHint,
                         hintStyle: TextStyle(
                           color: Colors.white.withOpacity(0.35),
                         ),
@@ -909,8 +920,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         Navigator.pop(context);
                         _sendImageMessage(imageFile, captionController.text);
                       },
-                      child: const Text(
-                        'Send to Ollie',
+                      child: Text(
+                        AppLocalizations.of(context)!.chatSendToOllie,
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -963,7 +974,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
       final reply = response['reply'] as String?;
       if (reply == null) {
-        _showError("couldn't get a reply for that photo");
+        _showError(AppLocalizations.of(context)!.chatNoReplyForPhoto);
         return;
       }
 
@@ -1011,8 +1022,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                "you're out of free messages for today",
+              Text(
+                AppLocalizations.of(context)!.chatOutOfFreeMessages,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -1022,7 +1033,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 8),
               Text(
-                "watch a quick ad for 10 more minutes with ollie",
+                AppLocalizations.of(context)!.chatWatchAdSubtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
@@ -1044,8 +1055,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     Navigator.pop(context);
                     _watchAdForImageBonus(imageFile, caption);
                   },
-                  child: const Text(
-                    'watch ad for 10 more minutes',
+                  child: Text(
+                    AppLocalizations.of(context)!.chatWatchAdButton,
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -1060,7 +1071,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   _openPaywall();
                 },
                 child: Text(
-                  'or subscribe for unlimited messages',
+                  AppLocalizations.of(context)!.chatSubscribeUnlimited,
                   style: TextStyle(color: Colors.white.withOpacity(0.7)),
                 ),
               ),
@@ -1073,7 +1084,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   void _watchAdForImageBonus(File imageFile, String? caption) {
     if (_rewardedAd == null) {
-      _showError("ad not ready yet — try again in a moment");
+      _showError(AppLocalizations.of(context)!.chatAdNotReady);
       _loadRewardedAd();
       return;
     }
@@ -1086,7 +1097,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();
         _loadRewardedAd();
-        _showError("couldn't show ad, try again");
+        _showError(AppLocalizations.of(context)!.chatAdShowFailed);
       },
     );
 
@@ -1096,7 +1107,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           await _api.watchAdBonus();
           await _requestImageReaction(imageFile, caption);
         } catch (e) {
-          _showError("couldn't unlock bonus messages, try again");
+          _showError(AppLocalizations.of(context)!.chatAdBonusFailed);
         }
       },
     );
@@ -1166,14 +1177,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     try {
       final status = await Permission.microphone.request();
       if (!status.isGranted) {
-        _showError('Microphone permission is needed to send a voice message');
+        _showError(AppLocalizations.of(context)!.chatMicPermissionNeeded);
         return false;
       }
       await _recorder.openRecorder();
       _recorderInitialized = true;
       return true;
     } catch (e) {
-      _showError('Could not access the microphone');
+      _showError(AppLocalizations.of(context)!.chatCouldNotAccessMic);
       return false;
     }
   }
@@ -1197,7 +1208,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _recordingStartedAt = DateTime.now();
       setState(() => _isListening = true);
     } catch (e) {
-      _showError('Could not start recording');
+      _showError(AppLocalizations.of(context)!.chatCouldNotStartRecording);
     }
   }
 
@@ -1210,7 +1221,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     try {
       path = await _recorder.stopRecorder();
     } catch (e) {
-      _showError('Recording failed');
+      _showError(AppLocalizations.of(context)!.chatRecordingFailed);
       return;
     }
 
@@ -1234,7 +1245,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final reply = response['reply'] as String?;
 
       if (transcribed == null || transcribed.isEmpty || reply == null) {
-        _showError("couldn't hear anything in that recording");
+        _showError(AppLocalizations.of(context)!.chatCouldNotHearRecording);
         return;
       }
 
@@ -1319,8 +1330,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               const SizedBox(height: 20),
               const Icon(Icons.mic_rounded, color: Color(0xFFFF8C6B), size: 32),
               const SizedBox(height: 12),
-              const Text(
-                "talking with ollie is a premium thing",
+              Text(
+                AppLocalizations.of(context)!.chatVoicePremiumTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -1330,7 +1341,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 8),
               Text(
-                "go premium to talk to ollie and hear him talk back, anytime",
+                AppLocalizations.of(context)!.chatVoicePremiumSubtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
@@ -1352,8 +1363,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     Navigator.pop(context);
                     _openPaywall();
                   },
-                  child: const Text(
-                    'go premium',
+                  child: Text(
+                    AppLocalizations.of(context)!.chatGoPremium,
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -1368,7 +1379,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   _playVoicePreview();
                 },
                 child: Text(
-                  "hear a quick sample first",
+                  AppLocalizations.of(context)!.chatHearSampleFirst,
                   style: TextStyle(color: Colors.white.withOpacity(0.7)),
                 ),
               ),
@@ -1501,7 +1512,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ),
               ),
               Text(
-                widget.initialModeLabel ?? 'always here',
+                widget.initialModeLabel ?? AppLocalizations.of(context)!.chatAlwaysHere,
                 style: TextStyle(
                   color: widget.initialModeLabel != null
                       ? const Color(0xFFFF8C6B)
@@ -1619,7 +1630,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: Text(
-              _emotionalHeader,
+              _emotionalHeader ?? AppLocalizations.of(context)!.chatMoodDefault,
               key: ValueKey(_emotionalHeader),
               style: const TextStyle(
                 color: Colors.white,
@@ -1663,7 +1674,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     final trialSuffix = _voiceTrialSecondsRemaining != null
-        ? ' · ${_voiceTrialSecondsRemaining}s left'
+        ? AppLocalizations.of(context)!.chatSecondsLeft(_voiceTrialSecondsRemaining!)
         : '';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1895,7 +1906,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             Icon(Icons.error_outline, size: 13, color: Colors.red.shade300),
             const SizedBox(width: 4),
             Text(
-              'Failed to send · Tap to retry',
+              AppLocalizations.of(context)!.chatFailedToSend,
               style: TextStyle(color: Colors.red.shade300, fontSize: 12),
             ),
           ],
@@ -1970,9 +1981,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             },
           ),
           const SizedBox(height: 24),
-          const Text(
-            'hey there 😊',
-            style: TextStyle(
+          Text(
+            AppLocalizations.of(context)!.chatMoodDefault,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -1980,7 +1991,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 8),
           Text(
-            'How are you feeling?',
+            AppLocalizations.of(context)!.chatHowAreYouFeeling,
             style: TextStyle(color: Colors.grey.withOpacity(0.7), fontSize: 14),
           ),
           const SizedBox(height: 20),
@@ -2001,7 +2012,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     size: 18,
                   ),
             label: Text(
-              "hear what ollie sounds like",
+              AppLocalizations.of(context)!.chatHearWhatOllieSounds,
               style: TextStyle(color: Colors.white.withOpacity(0.7)),
             ),
           ),
@@ -2173,7 +2184,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     style: const TextStyle(color: Colors.white),
                     maxLines: null,
                     decoration: InputDecoration(
-                      hintText: 'Type a message...',
+                      hintText: AppLocalizations.of(context)!.chatInputPlaceholder,
                       hintStyle: TextStyle(
                         color: Colors.white.withOpacity(0.3),
                       ),
@@ -2240,7 +2251,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  target.isOllie ? 'Replying to Ollie' : 'Replying to yourself',
+                  target.isOllie
+                      ? AppLocalizations.of(context)!.chatReplyingToOllie
+                      : AppLocalizations.of(context)!.chatReplyingToYourself,
                   style: const TextStyle(
                     color: Color(0xFFFF8C6B),
                     fontSize: 12,

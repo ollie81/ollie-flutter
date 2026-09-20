@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../l10n/generated/app_localizations.dart';
+import '../l10n/locale_controller.dart';
 import '../services/api_service.dart';
 import '../services/purchase_service.dart';
 import 'auth_screen.dart';
@@ -88,28 +91,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String? get _planLabel {
-    if (_productId == PurchaseService.lifetimeId) return 'Lifetime';
-    if (_productId == PurchaseService.yearlyId) return 'Yearly';
-    if (_productId == PurchaseService.monthlyId) return 'Monthly';
+    final l10n = AppLocalizations.of(context)!;
+    if (_productId == PurchaseService.lifetimeId) return l10n.settingsPlanLifetime;
+    if (_productId == PurchaseService.yearlyId) return l10n.settingsPlanYearly;
+    if (_productId == PurchaseService.monthlyId) return l10n.settingsPlanMonthly;
     return null;
   }
 
   String? get _renewalSummary {
-    if (_productId == PurchaseService.lifetimeId) return 'No renewal — yours for life 🎉';
+    final l10n = AppLocalizations.of(context)!;
+    if (_productId == PurchaseService.lifetimeId) return l10n.settingsRenewalLifetime;
     if (_expiryTimeMillis == null) return null;
     final date = DateTime.fromMillisecondsSinceEpoch(_expiryTimeMillis!);
-    final formatted = '${_monthName(date.month)} ${date.day}, ${date.year}';
-    return 'Renews $formatted';
+    final formatted = DateFormat.yMMMd(Localizations.localeOf(context).toString()).format(date);
+    return l10n.settingsRenewsOn(formatted);
   }
 
-  static const List<String> _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  String _monthName(int month) => _monthNames[(month - 1).clamp(0, 11)];
+  static const List<String> _frequencyValues = ['off', 'low', 'normal', 'frequent'];
+
+  String _freqLabel(AppLocalizations l10n, String value) {
+    switch (value) {
+      case 'off':
+        return l10n.settingsFreqOffLabel;
+      case 'low':
+        return l10n.settingsFreqLowLabel;
+      case 'frequent':
+        return l10n.settingsFreqFrequentLabel;
+      default:
+        return l10n.settingsFreqNormalLabel;
+    }
+  }
+
+  String _freqDescription(AppLocalizations l10n, String value) {
+    switch (value) {
+      case 'off':
+        return l10n.settingsFreqOffDescription;
+      case 'low':
+        return l10n.settingsFreqLowDescription;
+      case 'frequent':
+        return l10n.settingsFreqFrequentDescription;
+      default:
+        return l10n.settingsFreqNormalDescription;
+    }
+  }
 
   Future<void> _exportData() async {
     if (_isExporting) return;
     setState(() => _isExporting = true);
+    final l10n = AppLocalizations.of(context)!;
     try {
       final data = await _api.exportUserData();
       final jsonString = const JsonEncoder.withIndent('  ').convert(data);
@@ -118,42 +147,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await file.writeAsString(jsonString);
       if (!mounted) return;
       await SharePlus.instance.share(
-        ShareParams(files: [XFile(file.path)], text: 'Your Ollie data export'),
+        ShareParams(files: [XFile(file.path)], text: l10n.settingsExportShareText),
       );
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not export your data, try again');
+      _showError(l10n.settingsExportError);
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
   }
 
   Future<void> _openSubscriptionManagement() async {
+    final l10n = AppLocalizations.of(context)!;
     final uri = Uri.parse('https://play.google.com/store/account/subscriptions');
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened) throw Exception('launch returned false');
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not open the Play Store — manage your subscription there directly.');
+      _showError(l10n.settingsOpenPlayStoreError);
     }
   }
 
-  static const List<Map<String, String>> _frequencyOptions = [
-    {'value': 'off', 'label': 'Off', 'description': "Ollie won't reach out first"},
-    {'value': 'low', 'label': 'Low', 'description': 'Just a morning hello'},
-    {'value': 'normal', 'label': 'Normal', 'description': 'Morning, evening, and check-ins'},
-    {'value': 'frequent', 'label': 'Frequent', 'description': "More often, checks in sooner if you're quiet"},
-  ];
-
   String _frequencyLabel(String value) {
-    return _frequencyOptions.firstWhere(
-      (o) => o['value'] == value,
-      orElse: () => _frequencyOptions[2],
-    )['label']!;
+    final l10n = AppLocalizations.of(context)!;
+    return _freqLabel(l10n, _frequencyValues.contains(value) ? value : 'normal');
   }
 
   Future<void> _setFrequency(String frequency) async {
+    final l10n = AppLocalizations.of(context)!;
     final previous = _notificationFrequency;
     setState(() => _notificationFrequency = frequency);
     try {
@@ -161,24 +183,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _notificationFrequency = previous);
-      _showError('Could not update notification setting');
+      _showError(l10n.settingsFrequencyError);
     }
   }
 
   Future<void> _showFrequencyDialog() async {
+    final l10n = AppLocalizations.of(context)!;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1035),
-        title: const Text('How often should Ollie reach out?', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.settingsFrequencyDialogTitle, style: const TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: _frequencyOptions.map((option) {
-            final selected = option['value'] == _notificationFrequency;
+          children: _frequencyValues.map((value) {
+            final selected = value == _notificationFrequency;
             // "Frequent" is Premium-only (see settings.py's write-time
             // gate) -- a free user tapping it goes to the paywall
             // instead of a dead-end error.
-            final locked = option['value'] == 'frequent' && !_isPremium;
+            final locked = value == 'frequent' && !_isPremium;
             return InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: () {
@@ -186,7 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (locked) {
                   _openPaywall();
                 } else if (!selected) {
-                  _setFrequency(option['value']!);
+                  _setFrequency(value);
                 }
               },
               child: Padding(
@@ -208,13 +231,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Row(
                             children: [
                               Text(
-                                option['label']!,
+                                _freqLabel(l10n, value),
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
                               ),
                               if (locked) ...[
                                 const SizedBox(width: 6),
                                 Text(
-                                  'PREMIUM',
+                                  l10n.settingsPremiumBadge,
                                   style: TextStyle(
                                     color: const Color(0xFFFF8C6B).withOpacity(0.9),
                                     fontWeight: FontWeight.w700,
@@ -226,7 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ),
                           Text(
-                            option['description']!,
+                            _freqDescription(l10n, value),
                             style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
                           ),
                         ],
@@ -241,14 +264,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            child: Text(l10n.commonCancel, style: TextStyle(color: Colors.white.withOpacity(0.6))),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _showLanguageDialog() async {
+    final l10n = AppLocalizations.of(context)!;
+    final current = Localizations.localeOf(context).languageCode;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1035),
+        title: Text(l10n.settingsChooseLanguage, style: const TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: kSupportedLanguages.map((lang) {
+              final selected = lang.code == current;
+              return InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () {
+                  Navigator.pop(context);
+                  if (!selected) LocaleController.setLocale(lang.code);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        color: selected ? const Color(0xFFFF8C6B) : Colors.white.withOpacity(0.4),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(lang.label, style: const TextStyle(color: Colors.white, fontSize: 15)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.commonCancel, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _currentLanguageLabel() {
+    final code = Localizations.localeOf(context).languageCode;
+    return kSupportedLanguages.firstWhere((l) => l.code == code, orElse: () => kSupportedLanguages.first).label;
+  }
+
   Future<void> _toggleMemory(bool value) async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _memoryEnabled = value);
     try {
       await _api.setMemoryEnabled(value);
@@ -256,18 +332,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // revert on failure
       if (!mounted) return;
       setState(() => _memoryEnabled = !value);
-      _showError('Could not update memory setting');
+      _showError(l10n.settingsMemoryToggleError);
     }
   }
 
   String _locationSummary() {
+    final l10n = AppLocalizations.of(context)!;
     final parts = [_district, _region, _country]
         .where((p) => p != null && p.trim().isNotEmpty)
         .toList();
-    return parts.isEmpty ? 'Not set' : parts.join(', ');
+    return parts.isEmpty ? l10n.settingsLocationNotSet : parts.join(', ');
   }
 
   Future<void> _showLocationEditDialog() async {
+    final l10n = AppLocalizations.of(context)!;
     final countryController = TextEditingController(text: _country);
     final regionController = TextEditingController(text: _region);
     final districtController = TextEditingController(text: _district);
@@ -276,34 +354,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1035),
-        title: const Text('Your location', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.settingsYourLocation, style: const TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "so Ollie can talk like a local — reference your culture, "
-                "holidays, what's actually going on where you are",
+                l10n.settingsLocationHint,
                 style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
               ),
               const SizedBox(height: 16),
-              _locationField(countryController, 'Country'),
+              _locationField(countryController, l10n.settingsCountryLabel),
               const SizedBox(height: 10),
-              _locationField(regionController, 'State / Province / Region'),
+              _locationField(regionController, l10n.settingsRegionLabel),
               const SizedBox(height: 10),
-              _locationField(districtController, 'District / City (optional)'),
+              _locationField(districtController, l10n.settingsDistrictLabel),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            child: Text(l10n.commonCancel, style: TextStyle(color: Colors.white.withOpacity(0.6))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save', style: TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
+            child: Text(l10n.commonSave, style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -327,10 +404,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _region = region.isEmpty ? null : region;
         _district = district.isEmpty ? null : district;
       });
-      _showSuccess('Location updated');
+      _showSuccess(l10n.settingsLocationUpdated);
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not update location, try again');
+      _showError(l10n.settingsLocationError);
     }
   }
 
@@ -354,12 +431,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmClearMemory() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await _showConfirmDialog(
-      title: 'Clear memory?',
-      message:
-          "Ollie will forget everything it's learned about you — your interests, "
-          "things you've shared, patterns it noticed. This can't be undone.",
-      confirmLabel: 'Clear memory',
+      title: l10n.settingsClearMemoryTitle,
+      message: l10n.settingsClearMemoryMessage,
+      confirmLabel: l10n.settingsClearMemoryConfirm,
       isDestructive: true,
     );
     if (confirmed != true) return;
@@ -367,9 +443,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await _api.clearMemory();
       if (!mounted) return;
-      _showSuccess('Memory cleared');
+      _showSuccess(l10n.settingsMemoryCleared);
     } catch (e) {
-      _showError('Could not clear memory, try again');
+      _showError(l10n.settingsMemoryClearError);
     }
   }
 
@@ -379,10 +455,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await _showConfirmDialog(
-      title: 'Log out?',
-      message: 'You can log back in anytime.',
-      confirmLabel: 'Log out',
+      title: l10n.settingsLogOutTitle,
+      message: l10n.settingsLogOutMessage,
+      confirmLabel: l10n.settingsLogOut,
       isDestructive: false,
     );
     if (confirmed != true) return;
@@ -404,6 +481,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String confirmLabel,
     required bool isDestructive,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -413,7 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            child: Text(l10n.commonCancel, style: TextStyle(color: Colors.white.withOpacity(0.6))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -444,12 +522,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F1A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Settings', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.settingsTitle, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loading
@@ -457,21 +536,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _sectionLabel('Account'),
-                _infoTile(Icons.phone_android, 'Phone number', widget.phoneNumber),
+                _sectionLabel(l10n.settingsSectionAccount),
+                _infoTile(Icons.phone_android, l10n.settingsPhoneNumber, widget.phoneNumber),
                 _actionTile(
                   Icons.logout,
-                  'Log out',
+                  l10n.settingsLogOut,
                   onTap: _logout,
                 ),
                 _actionTile(
                   Icons.download_outlined,
-                  _isExporting ? 'Preparing your export…' : 'Export my data',
+                  _isExporting ? l10n.settingsExportPreparing : l10n.settingsExportData,
                   onTap: _exportData,
                 ),
                 _actionTile(
                   Icons.delete_outline,
-                  'Delete account',
+                  l10n.settingsDeleteAccount,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
@@ -479,70 +558,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   destructive: true,
                 ),
 
-                _sectionLabel('Usage'),
+                _sectionLabel(l10n.settingsSectionUsage),
                 _infoTile(
                   Icons.chat_bubble_outline,
-                  'Messages today',
+                  l10n.settingsMessagesToday,
                   '$_messagesUsedToday / $_dailyLimit'
-                      '${_isPremium ? " (premium — unlimited)" : ""}'
-                      '${_hasActiveAdBonus ? " · bonus active" : ""}',
+                      '${_isPremium ? l10n.settingsPremiumUnlimited : ""}'
+                      '${_hasActiveAdBonus ? l10n.settingsBonusActive : ""}',
                 ),
                 _infoTile(
                   Icons.workspace_premium_outlined,
-                  'Plan',
-                  _isPremium ? (_planLabel ?? 'Premium') : 'Free',
+                  l10n.settingsPlan,
+                  _isPremium ? (_planLabel ?? l10n.settingsPlanPremiumFallback) : l10n.settingsPlanFree,
                 ),
                 if (_isPremium && _renewalSummary != null)
-                  _infoTile(Icons.event_repeat_outlined, 'Renewal', _renewalSummary!),
+                  _infoTile(Icons.event_repeat_outlined, l10n.settingsRenewal, _renewalSummary!),
                 if (_isPremium && _productId != PurchaseService.lifetimeId)
                   _actionTile(
                     Icons.open_in_new_rounded,
-                    'Manage subscription',
+                    l10n.settingsManageSubscription,
                     onTap: _openSubscriptionManagement,
                   ),
                 if (!_isPremium)
                   _actionTile(
                     Icons.workspace_premium_outlined,
-                    'Upgrade to Premium',
+                    l10n.settingsUpgradeToPremium,
                     onTap: _openPaywall,
                   ),
 
-                _sectionLabel('Notifications'),
+                _sectionLabel(l10n.settingsSectionNotifications),
                 _infoTile(
                   Icons.notifications_none,
-                  'How often Ollie reaches out',
+                  l10n.settingsReachOutFrequency,
                   _frequencyLabel(_notificationFrequency),
                 ),
                 _actionTile(
                   Icons.tune,
-                  'Change',
+                  l10n.commonChange,
                   onTap: _showFrequencyDialog,
                 ),
 
-                _sectionLabel('Location'),
+                _sectionLabel(l10n.settingsSectionLocation),
                 _infoTile(
                   Icons.location_on_outlined,
-                  'Your location',
+                  l10n.settingsYourLocation,
                   _locationSummary(),
                 ),
                 _actionTile(
                   Icons.edit_location_alt_outlined,
                   _country == null && _region == null && _district == null
-                      ? 'Set your location'
-                      : 'Edit location',
+                      ? l10n.settingsSetLocation
+                      : l10n.settingsEditLocation,
                   onTap: _showLocationEditDialog,
                 ),
 
-                _sectionLabel('Memory'),
+                _sectionLabel(l10n.settingsSectionMemory),
                 _switchTile(
                   Icons.psychology_outlined,
-                  'Let Ollie remember',
+                  l10n.settingsLetOllieRemember,
                   _memoryEnabled,
                   _toggleMemory,
                 ),
                 _actionTile(
                   Icons.auto_stories_outlined,
-                  'Manage memories',
+                  l10n.settingsManageMemories,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const MemoriesScreen()),
@@ -550,16 +629,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _actionTile(
                   Icons.refresh,
-                  'Clear Ollie\'s memory of you',
+                  l10n.settingsClearMemory,
                   onTap: _confirmClearMemory,
                   destructive: true,
                 ),
 
-                _sectionLabel('About'),
-                _infoTile(Icons.info_outline, 'Ollie', 'Made in Rwanda 🇷🇼'),
+                _sectionLabel(l10n.settingsSectionLanguage),
+                _infoTile(Icons.language, l10n.settingsChooseLanguage, _currentLanguageLabel()),
+                _actionTile(
+                  Icons.tune,
+                  l10n.commonChange,
+                  onTap: _showLanguageDialog,
+                ),
+
+                _sectionLabel(l10n.settingsSectionAbout),
+                _infoTile(Icons.info_outline, l10n.settingsAboutOllie, l10n.settingsMadeInRwanda),
                 _actionTile(
                   Icons.privacy_tip_outlined,
-                  'Privacy Policy',
+                  l10n.settingsPrivacyPolicy,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
@@ -567,7 +654,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _actionTile(
                   Icons.description_outlined,
-                  'Terms of Service',
+                  l10n.settingsTermsOfService,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),

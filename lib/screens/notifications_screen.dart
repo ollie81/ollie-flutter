@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -34,25 +36,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await _api.markNotificationRead(notification['id']);
   }
 
-  String _relativeTime(String? createdAt) {
+  String _relativeTime(BuildContext context, String? createdAt) {
+    final l10n = AppLocalizations.of(context)!;
     final parsed = DateTime.tryParse(createdAt ?? '');
     if (parsed == null) return '';
     final diff = DateTime.now().difference(parsed);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${parsed.month}/${parsed.day}/${parsed.year}';
+    if (diff.inMinutes < 1) return l10n.notifJustNow;
+    if (diff.inMinutes < 60) return l10n.notifMinutesAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.notifHoursAgo(diff.inHours);
+    if (diff.inDays < 7) return l10n.notifDaysAgo(diff.inDays);
+    return DateFormat.yMd(Localizations.localeOf(context).toString()).format(parsed);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F1A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Notifications', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.notificationsTitle, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: RefreshIndicator(
@@ -62,20 +66,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF8C6B)))
             : _notifications.isEmpty
-                ? _buildEmpty()
+                ? _buildEmpty(l10n)
                 : _buildList(),
       ),
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty(AppLocalizations l10n) {
     return ListView(
       children: [
         SizedBox(
           height: MediaQuery.of(context).size.height * 0.6,
           child: Center(
             child: Text(
-              "nothing here yet — Ollie's messages will show up in this list",
+              l10n.notificationsEmpty,
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
             ),
@@ -135,7 +139,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                           ),
                           Text(
-                            _relativeTime(notification['created_at']),
+                            _relativeTime(context, notification['created_at']),
                             style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
                           ),
                         ],
@@ -157,6 +161,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // "- line one\n- line two" -- render those as a small bulleted
   // list instead of a wall of dashes. Every other notification
   // (including the morning check-in) just renders as plain text.
+  // "Today with Ollie" is the backend's literal notification title
+  // (proactive.py), not UI copy -- it's never localized, so this
+  // match must stay in English regardless of the app's language.
   Widget _buildBody(Map<String, dynamic> notification) {
     final body = notification['body'] as String? ?? '';
     final lines = body.split('\n').map((l) => l.trim()).where((l) => l.startsWith('- ')).toList();

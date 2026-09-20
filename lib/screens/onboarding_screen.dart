@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import 'chat_screen.dart';
 
@@ -18,13 +19,6 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _IntroPageData {
-  final IconData icon;
-  final String headline;
-  final String subtitle;
-  const _IntroPageData({required this.icon, required this.headline, required this.subtitle});
-}
-
 class _OnboardingScreenState extends State<OnboardingScreen> with TickerProviderStateMixin {
   final ApiService _api = ApiService();
   final PageController _pageController = PageController();
@@ -41,30 +35,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
   late final Animation<double> _orbBreath =
       Tween<double>(begin: 0.92, end: 1.08).animate(CurvedAnimation(parent: _orbController, curve: Curves.easeInOut));
 
-  static const List<_IntroPageData> _pages = [
-    _IntroPageData(
-      icon: Icons.favorite_rounded,
-      headline: "Hey, I'm Ollie",
-      subtitle: "Not just another chatbot — a friend who's actually going to remember you.",
-    ),
-    _IntroPageData(
-      icon: Icons.auto_awesome_rounded,
-      headline: "I remember what matters",
-      subtitle: "Tell me something once, and I'll remember it — no repeating yourself, no starting over.",
-    ),
-    _IntroPageData(
-      icon: Icons.timeline_rounded,
-      headline: "We have a journey ahead",
-      subtitle: "The more we talk, the more I get to know you. Watch what we build together, over time.",
-    ),
-    _IntroPageData(
-      icon: Icons.handshake_rounded,
-      headline: "I'm here to actually help",
-      subtitle: "Need to study, plan your day, or just think out loud? I'll work through it with you — step by step.",
-    ),
+  // Headline/subtitle are looked up by index (_introHeadline/
+  // _introSubtitle) rather than stored here, since a static const
+  // list can't hold context-dependent localized strings.
+  static const List<IconData> _pageIcons = [
+    Icons.favorite_rounded,
+    Icons.auto_awesome_rounded,
+    Icons.timeline_rounded,
+    Icons.handshake_rounded,
   ];
 
-  int get _totalSteps => _pages.length + 1; // + the name-capture step
+  String _introHeadline(AppLocalizations l10n, int index) {
+    switch (index) {
+      case 0:
+        return l10n.onboardingPage1Headline;
+      case 1:
+        return l10n.onboardingPage2Headline;
+      case 2:
+        return l10n.onboardingPage3Headline;
+      default:
+        return l10n.onboardingPage4Headline;
+    }
+  }
+
+  String _introSubtitle(AppLocalizations l10n, int index) {
+    switch (index) {
+      case 0:
+        return l10n.onboardingPage1Subtitle;
+      case 1:
+        return l10n.onboardingPage2Subtitle;
+      case 2:
+        return l10n.onboardingPage3Subtitle;
+      default:
+        return l10n.onboardingPage4Subtitle;
+    }
+  }
+
+  int get _totalSteps => _pageIcons.length + 1; // + the name-capture step
 
   @override
   void dispose() {
@@ -93,7 +100,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
   Future<void> _finish() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      _showError("Tell me what to call you 🙂");
+      _showError(AppLocalizations.of(context)!.onboardingNameRequired);
       return;
     }
     if (_isSubmitting) return;
@@ -130,6 +137,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isLastPage = _currentPage == _totalSteps - 1;
 
     return Scaffold(
@@ -152,7 +160,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                     if (!isLastPage)
                       TextButton(
                         onPressed: _skipToName,
-                        child: Text('Skip', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14)),
+                        child: Text(l10n.onboardingSkip, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14)),
                       ),
                   ],
                 ),
@@ -163,8 +171,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                   physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (i) => setState(() => _currentPage = i),
                   children: [
-                    for (final page in _pages) _buildIntroPage(page),
-                    _buildNameCapturePage(),
+                    for (var i = 0; i < _pageIcons.length; i++) _buildIntroPage(l10n, i),
+                    _buildNameCapturePage(l10n),
                   ],
                 ),
               ),
@@ -218,7 +226,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                             ),
                           )
                         : Text(
-                            isLastPage ? "Let's go" : 'Next',
+                            isLastPage ? l10n.onboardingLetsGo : l10n.onboardingNext,
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
                           ),
@@ -232,9 +240,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     );
   }
 
-  Widget _buildIntroPage(_IntroPageData page) {
+  Widget _buildIntroPage(AppLocalizations l10n, int index) {
     return TweenAnimationBuilder<double>(
-      key: ValueKey(page.headline),
+      key: ValueKey(index),
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeOutCubic,
@@ -262,18 +270,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                     BoxShadow(color: const Color(0xFFFF8C6B).withOpacity(0.45), blurRadius: 40, spreadRadius: 6),
                   ],
                 ),
-                child: Icon(page.icon, color: Colors.white, size: 48),
+                child: Icon(_pageIcons[index], color: Colors.white, size: 48),
               ),
             ),
             const SizedBox(height: 40),
             Text(
-              page.headline,
+              _introHeadline(l10n, index),
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, height: 1.25),
             ),
             const SizedBox(height: 14),
             Text(
-              page.subtitle,
+              _introSubtitle(l10n, index),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15.5, height: 1.5),
             ),
@@ -283,7 +291,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     );
   }
 
-  Widget _buildNameCapturePage() {
+  Widget _buildNameCapturePage(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -306,14 +314,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
             ),
           ),
           const SizedBox(height: 36),
-          const Text(
-            'One more thing',
+          Text(
+            l10n.onboardingOneMoreThing,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
           Text(
-            'What should I call you?',
+            l10n.onboardingWhatToCallYou,
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15.5),
           ),
@@ -331,7 +339,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
               autofocus: widget.initialName == null,
               style: const TextStyle(color: Colors.white, fontSize: 17),
               decoration: InputDecoration(
-                hintText: 'Your name',
+                hintText: l10n.onboardingNameHint,
                 hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),

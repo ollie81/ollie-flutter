@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/generated/app_localizations.dart';
 import 'auth_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -6,6 +7,7 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -68,7 +70,7 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 // Subtitle
                 Text(
-                  'Your emotional companion',
+                  l10n.welcomeSubtitle,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 16,
@@ -103,19 +105,19 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Get Started',
-                          style: TextStyle(
+                          l10n.welcomeGetStarted,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Icon(
+                        const SizedBox(width: 8),
+                        const Icon(
                           Icons.arrow_forward,
                           color: Colors.white,
                           size: 18,

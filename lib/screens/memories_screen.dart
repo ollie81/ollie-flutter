@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 
 class MemoriesScreen extends StatefulWidget {
@@ -12,7 +13,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
   final ApiService _api = ApiService();
 
   bool _loading = true;
-  String? _error;
+  bool _hasError = false;
   List<Map<String, dynamic>> _memories = [];
 
   @override
@@ -24,7 +25,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
   Future<void> _loadMemories() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _hasError = false;
     });
     try {
       final memories = await _api.getMemories();
@@ -36,20 +37,21 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load memories, try again';
+        _hasError = true;
         _loading = false;
       });
     }
   }
 
   Future<void> _editMemory(Map<String, dynamic> memory) async {
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController(text: memory['memory_text'] ?? '');
 
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1035),
-        title: const Text('Edit memory', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.memoriesEditTitle, style: const TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
           maxLines: 3,
@@ -68,11 +70,11 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            child: Text(l10n.commonCancel, style: TextStyle(color: Colors.white.withOpacity(0.6))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save', style: TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
+            child: Text(l10n.commonSave, style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -89,28 +91,29 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
       setState(() => memory['memory_text'] = newText);
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not update memory, try again');
+      _showError(AppLocalizations.of(context)!.memoriesUpdateError);
     }
   }
 
   Future<void> _deleteMemory(Map<String, dynamic> memory) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1035),
-        title: const Text('Delete this memory?', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.memoriesDeleteTitle, style: const TextStyle(color: Colors.white)),
         content: Text(
-          'Ollie will forget this specific thing. This can\'t be undone.',
+          l10n.memoriesDeleteBody,
           style: TextStyle(color: Colors.white.withOpacity(0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            child: Text(l10n.commonCancel, style: TextStyle(color: Colors.white.withOpacity(0.6))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w600)),
+            child: Text(l10n.commonDelete, style: const TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -124,7 +127,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
       setState(() => _memories.removeWhere((m) => m['id'] == memory['id']));
     } catch (e) {
       if (!mounted) return;
-      _showError('Could not delete memory, try again');
+      _showError(AppLocalizations.of(context)!.memoriesDeleteError);
     }
   }
 
@@ -136,33 +139,34 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFF0D0F1A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Memories', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.memoriesTitle, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: _buildBody(),
+      body: _buildBody(l10n),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppLocalizations l10n) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFFFF8C6B)));
     }
 
-    if (_error != null) {
+    if (_hasError) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+            Text(l10n.memoriesLoadError, style: TextStyle(color: Colors.white.withOpacity(0.6))),
             const SizedBox(height: 12),
             TextButton(
               onPressed: _loadMemories,
-              child: const Text('Retry', style: TextStyle(color: Color(0xFFFF8C6B))),
+              child: Text(l10n.commonRetry, style: const TextStyle(color: Color(0xFFFF8C6B))),
             ),
           ],
         ),
@@ -179,13 +183,13 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
               Icon(Icons.auto_stories_outlined, color: Colors.white.withOpacity(0.25), size: 48),
               const SizedBox(height: 16),
               Text(
-                "Ollie hasn't saved anything yet",
+                l10n.memoriesEmptyTitle,
                 style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16, fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                'As you talk, the things worth remembering will show up here.',
+                l10n.memoriesEmptyDescription,
                 style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
                 textAlign: TextAlign.center,
               ),
@@ -202,12 +206,12 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _memories.length,
-        itemBuilder: (context, index) => _memoryCard(_memories[index]),
+        itemBuilder: (context, index) => _memoryCard(l10n, _memories[index]),
       ),
     );
   }
 
-  Widget _memoryCard(Map<String, dynamic> memory) {
+  Widget _memoryCard(AppLocalizations l10n, Map<String, dynamic> memory) {
     final category = (memory['category'] as String?)?.trim();
     final text = (memory['memory_text'] as String?) ?? '';
 
@@ -229,7 +233,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (category != null && category.isNotEmpty) ...[
-                  _categoryBadge(category),
+                  _categoryBadge(l10n, category),
                   const SizedBox(height: 6),
                 ],
                 Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.35)),
@@ -244,7 +248,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
     );
   }
 
-  Widget _categoryBadge(String category) {
+  Widget _categoryBadge(AppLocalizations l10n, String category) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -252,7 +256,7 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        _categoryLabel(category),
+        _categoryLabel(l10n, category),
         style: const TextStyle(
           color: Color(0xFFFF8C6B),
           fontSize: 11,
@@ -274,22 +278,22 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
     );
   }
 
-  String _categoryLabel(String category) {
+  String _categoryLabel(AppLocalizations l10n, String category) {
     switch (category) {
       case 'identity':
-        return 'About you';
+        return l10n.memoryCategoryIdentity;
       case 'preference':
-        return 'Preference';
+        return l10n.memoryCategoryPreference;
       case 'accomplishment':
-        return 'Accomplishment';
+        return l10n.memoryCategoryAccomplishment;
       case 'struggle':
-        return 'Struggle';
+        return l10n.memoryCategoryStruggle;
       case 'person':
-        return 'Person';
+        return l10n.memoryCategoryPerson;
       case 'event':
-        return 'Event';
+        return l10n.memoryCategoryEvent;
       case 'promise':
-        return 'Promise';
+        return l10n.memoryCategoryPromise;
       default:
         return category;
     }

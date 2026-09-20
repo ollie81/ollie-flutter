@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'l10n/generated/app_localizations.dart';
+import 'l10n/locale_controller.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -22,6 +25,10 @@ const String _sentryDsn = '';
 
 Future<void> _initApp() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load the saved language choice (if any) before the first frame,
+  // so the app doesn't flash English before switching.
+  await LocaleController.loadSaved();
 
   // Initialize Firebase
   await Firebase.initializeApp();
@@ -62,16 +69,24 @@ class OllieApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: NotificationService.navigatorKey,
-      title: 'Ollie',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0D0F1A),
-        fontFamily: 'SF Pro Display',
-      ),
-      home: const AuthWrapper(),
+    return ValueListenableBuilder<Locale?>(
+      valueListenable: LocaleController.notifier,
+      builder: (context, locale, _) {
+        return MaterialApp(
+          navigatorKey: NotificationService.navigatorKey,
+          title: 'Ollie',
+          debugShowCheckedModeBanner: false,
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: const Color(0xFF0D0F1A),
+            fontFamily: 'SF Pro Display',
+          ),
+          home: const AuthWrapper(),
+        );
+      },
     );
   }
 }

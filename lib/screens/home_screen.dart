@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import 'chat_screen.dart';
 import 'auth_screen.dart';
@@ -100,32 +101,33 @@ class _HomeScreenState extends State<HomeScreen>
       List<Map<String, dynamic>>.from(_journey?['active_goals'] ?? []);
 
   Future<void> _logout() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF151829),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Log out?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          l10n.homeLogOutTitle,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'You will need to log in again to talk to Ollie.',
+          l10n.homeLogOutMessage,
           style: TextStyle(color: Colors.white.withOpacity(0.6)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text(
-              'Cancel',
+              l10n.commonCancel,
               style: TextStyle(color: Colors.white.withOpacity(0.5)),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Log out',
-              style: TextStyle(
+            child: Text(
+              l10n.settingsLogOut,
+              style: const TextStyle(
                 color: Color(0xFFFF8C6B),
                 fontWeight: FontWeight.bold,
               ),
@@ -149,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showMenu() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF151829),
@@ -195,10 +198,10 @@ class _HomeScreenState extends State<HomeScreen>
                   color: Colors.white.withOpacity(0.06),
                   border: Border.all(color: Colors.white.withOpacity(0.1)),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Settings',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    l10n.settingsTitle,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -217,14 +220,14 @@ class _HomeScreenState extends State<HomeScreen>
                   color: Colors.red.withOpacity(0.1),
                   border: Border.all(color: Colors.red.withOpacity(0.3)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.logout_rounded, color: Colors.red, size: 18),
-                    SizedBox(width: 8),
+                    const Icon(Icons.logout_rounded, color: Colors.red, size: 18),
+                    const SizedBox(width: 8),
                     Text(
-                      'Log out',
-                      style: TextStyle(
+                      l10n.settingsLogOut,
+                      style: const TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
@@ -279,12 +282,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final hour = DateTime.now().hour;
     final greeting = hour < 12
-        ? "Good morning"
+        ? l10n.homeGreetingMorning
         : hour < 18
-            ? "Good afternoon"
-            : "Good evening";
+            ? l10n.homeGreetingAfternoon
+            : l10n.homeGreetingEvening;
 
     // Contextual when there's something real to reference (an
     // active goal) -- falls back to the generic line rather than
@@ -295,8 +299,8 @@ class _HomeScreenState extends State<HomeScreen>
     final hasContext = activeGoals.isNotEmpty &&
         (activeGoals.first['title'] as String? ?? '').trim().isNotEmpty;
     final headline = hasContext
-        ? "you've got \"${activeGoals.first['title']}\" to work on today"
-        : 'How are you feeling today?';
+        ? l10n.homeHeadlineWithGoal(activeGoals.first['title'] as String)
+        : l10n.homeHeadlineDefault;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
@@ -329,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen>
                 if (!hasContext) ...[
                   const SizedBox(height: 10),
                   Text(
-                    'Ollie is here to talk, listen, and stay with you.',
+                    l10n.homeSubtext,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.55),
                       fontSize: 14,
@@ -370,6 +374,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildMainOrb() {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: AnimatedBuilder(
         animation: _controller,
@@ -440,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Tap to chat',
+                          l10n.homeTapToChat,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.85),
                             fontSize: 14,
@@ -472,6 +477,7 @@ class _HomeScreenState extends State<HomeScreen>
   // promotional empty state). Reuses /journey/ data already loaded
   // for the header, so this costs nothing extra.
   Widget _buildJourneyStrip() {
+    final l10n = AppLocalizations.of(context)!;
     final highlightCount = (_journey?['highlights'] as List?)?.length ?? 0;
     final completedCount = (_journey?['completed_goals'] as List?)?.length ?? 0;
     final recentCount = highlightCount + completedCount;
@@ -502,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'YOUR JOURNEY',
+                      l10n.homeYourJourney,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.5),
                         fontSize: 10.5,
@@ -512,9 +518,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      recentCount == 1
-                          ? "1 thing you've accomplished recently"
-                          : "$recentCount things you've accomplished recently",
+                      l10n.homeRecentCount(recentCount),
                       style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -536,14 +540,15 @@ class _HomeScreenState extends State<HomeScreen>
   // separate backend capability. "Work on my goal" only appears
   // once there's an actual active goal to work on.
   Widget _buildQuickActions() {
+    final l10n = AppLocalizations.of(context)!;
     final hasActiveGoal = _activeGoals.isNotEmpty;
 
     final actions = <_QuickAction>[
-      const _QuickAction('Plan my day', Icons.wb_sunny_outlined, mode: 'plan_day'),
-      const _QuickAction('Study together', Icons.school_outlined, mode: 'study'),
-      if (hasActiveGoal) const _QuickAction('Work on my goal', Icons.flag_outlined, mode: 'build'),
-      const _QuickAction('Continue yesterday', Icons.history_rounded, mode: null),
-      const _QuickAction('More', Icons.more_horiz_rounded, mode: 'more'),
+      _QuickAction(l10n.homeActionPlanMyDay, Icons.wb_sunny_outlined, mode: 'plan_day'),
+      _QuickAction(l10n.homeActionStudyTogether, Icons.school_outlined, mode: 'study'),
+      if (hasActiveGoal) _QuickAction(l10n.homeActionWorkOnGoal, Icons.flag_outlined, mode: 'build'),
+      _QuickAction(l10n.homeActionContinueYesterday, Icons.history_rounded, mode: null),
+      _QuickAction(l10n.homeActionMore, Icons.more_horiz_rounded, mode: 'more'),
     ];
 
     return SizedBox(
@@ -595,6 +600,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _startButton() {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: _openChat,
       child: Container(
@@ -615,19 +621,19 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ],
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Start chatting',
-              style: TextStyle(
+              l10n.homeStartChatting,
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
               ),
             ),
-            SizedBox(width: 8),
-            Icon(
+            const SizedBox(width: 8),
+            const Icon(
               Icons.arrow_forward_rounded,
               color: Colors.white,
               size: 18,

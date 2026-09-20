@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import 'email_auth_screen.dart';
@@ -51,6 +52,8 @@ class _AuthScreenState extends State<AuthScreen> {
     return age;
   }
 
+  // Serializes a date for the backend (auth.py expects YYYY-MM-DD) --
+  // not a display formatter, so it stays locale-independent on purpose.
   String _formatDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -60,6 +63,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _handleGoogleLogin() async {
     setState(() => _isLoading = true);
+    final l10n = AppLocalizations.of(context)!;
 
     GoogleSignIn? googleSignIn;
     try {
@@ -74,7 +78,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
       if (idToken == null) {
-        _showError('Google Sign-In failed: no ID token returned');
+        _showError(l10n.authGoogleNoIdToken);
         return;
       }
 
@@ -93,7 +97,7 @@ class _AuthScreenState extends State<AuthScreen> {
           return;
         }
         if (_calculateAge(dob) < _minSignupAgeYears) {
-          _showError('You must be at least $_minSignupAgeYears years old to create an account');
+          _showError(l10n.authMinAgeRequired(_minSignupAgeYears));
           await googleSignIn.signOut();
           return;
         }
@@ -119,7 +123,7 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
     } catch (e) {
-      _showError('Google Sign-In failed: ${e.toString()}');
+      _showError(l10n.authGoogleFailed(e.toString()));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -129,6 +133,7 @@ class _AuthScreenState extends State<AuthScreen> {
   // backend reports this Google account is brand new. Returns null
   // if the user backs out without picking a date.
   Future<DateTime?> _collectDateOfBirth() {
+    final l10n = AppLocalizations.of(context)!;
     DateTime? picked;
     return showModalBottomSheet<DateTime>(
       context: context,
@@ -147,13 +152,13 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'One more thing',
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    l10n.authOneMoreThing,
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "We need your date of birth to finish setting up your account.",
+                    l10n.authDobHint,
                     style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
                   ),
                   const SizedBox(height: 20),
@@ -181,7 +186,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           Icon(Icons.cake_outlined, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
                           const SizedBox(width: 12),
                           Text(
-                            picked == null ? 'Date of birth' : _formatDate(picked!),
+                            picked == null ? l10n.authDateOfBirth : _formatDate(picked!),
                             style: TextStyle(
                               color: picked == null ? Colors.white.withOpacity(0.3) : Colors.white,
                               fontSize: 15,
@@ -205,10 +210,10 @@ class _AuthScreenState extends State<AuthScreen> {
                               : const [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
                         ),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Text(
-                          'Continue',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                          l10n.authContinue,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
                         ),
                       ),
                     ),
@@ -259,6 +264,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -300,20 +306,20 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: const Center(child: Text('🙂', style: TextStyle(fontSize: 44))),
                   ),
                   const SizedBox(height: 28),
-                  const Text(
-                    'Welcome to Ollie',
-                    style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                  Text(
+                    l10n.authWelcomeTitle,
+                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Sign in to continue',
+                    l10n.authSignInToContinue,
                     style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
                   ),
                   const SizedBox(height: 44),
 
                   // Google -- prominent, most users have one.
                   _primaryButton(
-                    label: 'Continue with Google',
+                    label: l10n.authContinueWithGoogle,
                     icon: Image.network(
                       'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
                       height: 22,
@@ -327,7 +333,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   // Email -- prominent, the other option most people
                   // already expect to be able to use.
                   _primaryButton(
-                    label: 'Continue with Email',
+                    label: l10n.authContinueWithEmail,
                     icon: const Icon(Icons.email_outlined, color: Colors.white, size: 20),
                     onTap: _isLoading
                         ? null
@@ -344,7 +350,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       Expanded(child: Divider(color: Colors.white.withOpacity(0.15), thickness: 1)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('or', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+                        child: Text(l10n.authOr, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
                       ),
                       Expanded(child: Divider(color: Colors.white.withOpacity(0.15), thickness: 1)),
                     ],
@@ -361,7 +367,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                     icon: Icon(Icons.phone_android, color: Colors.white.withOpacity(0.6), size: 18),
                     label: Text(
-                      'Continue with phone number',
+                      l10n.authContinueWithPhone,
                       style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                   ),

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../services/api_service.dart';
 
 // Searches the user's FULL message history server-side (not just
@@ -71,7 +73,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     }
   }
 
-  String _formatTimestamp(String? raw) {
+  String _formatTimestamp(BuildContext context, String? raw) {
     final time = DateTime.tryParse(raw ?? '');
     if (time == null) return '';
     final local = time.toLocal();
@@ -80,11 +82,9 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         local.year == now.year &&
         local.month == now.month &&
         local.day == now.day;
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final minute = local.minute.toString().padLeft(2, '0');
-    final ampm = local.hour >= 12 ? 'PM' : 'AM';
-    final time12 = '$hour:$minute $ampm';
-    return sameDay ? time12 : '${local.month}/${local.day} · $time12';
+    final locale = Localizations.localeOf(context).toString();
+    final time12 = DateFormat.jm(locale).format(local);
+    return sameDay ? time12 : '${DateFormat.Md(locale).format(local)} · $time12';
   }
 
   List<TextSpan> _highlightedSpans(String text, String query) {
@@ -125,6 +125,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -137,8 +138,8 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildSearchHeader(),
-              Expanded(child: _buildBody()),
+              _buildSearchHeader(l10n),
+              Expanded(child: _buildBody(l10n)),
             ],
           ),
         ),
@@ -146,7 +147,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     );
   }
 
-  Widget _buildSearchHeader() {
+  Widget _buildSearchHeader(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
       child: Row(
@@ -168,7 +169,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                 style: const TextStyle(color: Colors.white),
                 onChanged: _onQueryChanged,
                 decoration: InputDecoration(
-                  hintText: 'Search your chats with Ollie...',
+                  hintText: l10n.chatSearchHint,
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
                   border: InputBorder.none,
                   prefixIcon: Icon(
@@ -198,7 +199,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppLocalizations l10n) {
     if (_isSearching) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFFFF8C6B)),
@@ -207,16 +208,16 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     if (!_hasSearched) {
       return _buildPlaceholder(
         Icons.search_rounded,
-        "Search anything you or Ollie said",
+        l10n.chatSearchPlaceholder,
       );
     }
     if (_results.isEmpty) {
-      return _buildPlaceholder(Icons.search_off_rounded, "No messages found");
+      return _buildPlaceholder(Icons.search_off_rounded, l10n.chatSearchNoResults);
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _results.length,
-      itemBuilder: (context, index) => _buildResultTile(_results[index]),
+      itemBuilder: (context, index) => _buildResultTile(l10n, _results[index]),
     );
   }
 
@@ -239,7 +240,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     );
   }
 
-  Widget _buildResultTile(dynamic result) {
+  Widget _buildResultTile(AppLocalizations l10n, dynamic result) {
     final isOllie = result['sender'] == 'ollie';
     final text = result['message'] as String? ?? '';
     final query = _controller.text.trim();
@@ -294,7 +295,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                   Row(
                     children: [
                       Text(
-                        isOllie ? 'Ollie' : 'You',
+                        isOllie ? 'Ollie' : l10n.commonYou,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
@@ -303,7 +304,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _formatTimestamp(result['created_at'] as String?),
+                        _formatTimestamp(context, result['created_at'] as String?),
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.35),
                           fontSize: 11,
