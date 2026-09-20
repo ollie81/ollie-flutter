@@ -620,7 +620,6 @@ class ApiService {
     required String phoneNumber,
     required String password,
     required String otp,
-    String? dateOfBirth,
   }) async {
     final response = await _publicRequest(
       method: 'POST',
@@ -629,7 +628,6 @@ class ApiService {
         'phone_number': phoneNumber,
         'password': password,
         'otp': otp,
-        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
       },
     );
 
@@ -754,7 +752,6 @@ class ApiService {
     required String email,
     required String password,
     required String otp,
-    String? dateOfBirth,
   }) async {
     final response = await _publicRequest(
       method: 'POST',
@@ -763,7 +760,6 @@ class ApiService {
         'email': email,
         'password': password,
         'otp': otp,
-        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
       },
     );
 
@@ -849,25 +845,17 @@ class ApiService {
   // GOOGLE LOGIN
   // ============================================================
 
-  Future<Map<String, dynamic>> googleLogin({required String idToken, String? dateOfBirth}) async {
+  Future<Map<String, dynamic>> googleLogin({required String idToken}) async {
     final response = await _publicRequest(
       method: 'POST',
       endpoint: '/auth/google',
       body: {
         'id_token': idToken,
-        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
       },
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-
-      // A brand-new Google account with no date_of_birth yet -- the
-      // backend hasn't created it and there's nothing to save here.
-      // The caller collects one and calls this again with it.
-      if (data['needs_date_of_birth'] == true) {
-        return data;
-      }
 
       await saveTokens(
         accessToken: data['access_token'],

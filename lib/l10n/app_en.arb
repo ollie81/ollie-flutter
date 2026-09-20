@@ -142,18 +142,10 @@
   "onboardingNameHint": "Your name",
 
   "authGoogleNoIdToken": "Google Sign-In failed: no ID token returned",
-  "authMinAgeRequired": "You must be at least {age} years old to create an account",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "Google Sign-In failed: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "One more thing",
-  "authDobHint": "We need your date of birth to finish setting up your account.",
-  "authDateOfBirth": "Date of birth",
-  "authContinue": "Continue",
   "authWelcomeTitle": "Welcome to Ollie",
   "authSignInToContinue": "Sign in to continue",
   "authContinueWithGoogle": "Continue with Google",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "Enter password",
   "emailAuthErrorPasswordTooShort": "Password must be at least 6 characters",
   "emailAuthErrorPasswordMismatch": "Passwords do not match",
-  "emailAuthErrorEnterDob": "Enter your date of birth",
   "emailAuthErrorEnterCode": "Enter the code",
   "emailAuthCodeSent": "Code sent to your email",
   "emailAuthEnterCodeSentHint": "Enter the code sent to your email",

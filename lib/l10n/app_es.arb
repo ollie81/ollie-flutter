@@ -142,18 +142,10 @@
   "onboardingNameHint": "Tu nombre",
 
   "authGoogleNoIdToken": "El inicio de sesión con Google falló: no se recibió ningún token de identificación",
-  "authMinAgeRequired": "Debes tener al menos {age} años para crear una cuenta",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "El inicio de sesión con Google falló: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "Una cosa más",
-  "authDobHint": "Necesitamos tu fecha de nacimiento para terminar de configurar tu cuenta.",
-  "authDateOfBirth": "Fecha de nacimiento",
-  "authContinue": "Continuar",
   "authWelcomeTitle": "Bienvenido a Ollie",
   "authSignInToContinue": "Inicia sesión para continuar",
   "authContinueWithGoogle": "Continuar con Google",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "Ingresa la contraseña",
   "emailAuthErrorPasswordTooShort": "La contraseña debe tener al menos 6 caracteres",
   "emailAuthErrorPasswordMismatch": "Las contraseñas no coinciden",
-  "emailAuthErrorEnterDob": "Ingresa tu fecha de nacimiento",
   "emailAuthErrorEnterCode": "Ingresa el código",
   "emailAuthCodeSent": "Código enviado a tu correo",
   "emailAuthEnterCodeSentHint": "Ingresa el código enviado a tu correo",

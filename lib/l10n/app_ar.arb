@@ -142,18 +142,10 @@
   "onboardingNameHint": "اسمك",
 
   "authGoogleNoIdToken": "فشل تسجيل الدخول عبر Google: لم يتم إرجاع رمز تعريف",
-  "authMinAgeRequired": "يجب أن يكون عمرك {age} عامًا على الأقل لإنشاء حساب",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "فشل تسجيل الدخول عبر Google: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "بقي أمر واحد",
-  "authDobHint": "نحتاج إلى تاريخ ميلادك لإكمال إعداد حسابك.",
-  "authDateOfBirth": "تاريخ الميلاد",
-  "authContinue": "متابعة",
   "authWelcomeTitle": "مرحبًا بك في Ollie",
   "authSignInToContinue": "سجّل الدخول للمتابعة",
   "authContinueWithGoogle": "المتابعة عبر Google",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "أدخل كلمة المرور",
   "emailAuthErrorPasswordTooShort": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل",
   "emailAuthErrorPasswordMismatch": "كلمتا المرور غير متطابقتين",
-  "emailAuthErrorEnterDob": "أدخل تاريخ ميلادك",
   "emailAuthErrorEnterCode": "أدخل الرمز",
   "emailAuthCodeSent": "أُرسل رمز إلى بريدك الإلكتروني",
   "emailAuthEnterCodeSentHint": "أدخل الرمز المُرسَل إلى بريدك الإلكتروني",

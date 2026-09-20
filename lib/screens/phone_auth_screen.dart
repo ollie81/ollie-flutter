@@ -49,40 +49,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   bool _otpSent = false;
   bool _signupOtpSent = false;
   final TextEditingController _signupOtpController = TextEditingController();
-  DateTime? _dateOfBirth;
-
-  static const int _minSignupAgeYears = 13;
-
-  int _calculateAge(DateTime dob) {
-    final now = DateTime.now();
-    int age = now.year - dob.year;
-    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
-      age--;
-    }
-    return age;
-  }
-
-  // Serializes a date for the backend (auth.py expects YYYY-MM-DD) --
-  // not a display formatter, so it stays locale-independent on purpose.
-  String _formatDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  Future<void> _pickDateOfBirth() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      // Typing "01/15/1990" beats hunting through a calendar grid
-      // for a birth date that's often decades back -- still one tap
-      // away from the calendar view via the icon in the dialog.
-      initialEntryMode: DatePickerEntryMode.input,
-      initialDate: DateTime(now.year - 18, now.month, now.day),
-      firstDate: DateTime(now.year - 100),
-      lastDate: now,
-    );
-    if (picked != null) {
-      setState(() => _dateOfBirth = picked);
-    }
-  }
 
   // ============================================================
   // SUBMIT HANDLER
@@ -116,14 +82,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           _showError(l10n.emailAuthErrorPasswordMismatch);
           return;
         }
-        if (_dateOfBirth == null) {
-          _showError(l10n.emailAuthErrorEnterDob);
-          return;
-        }
-        if (_calculateAge(_dateOfBirth!) < _minSignupAgeYears) {
-          _showError(l10n.authMinAgeRequired(_minSignupAgeYears));
-          return;
-        }
 
         if (!_signupOtpSent) {
           await _api.requestSignupOtp(phoneNumber: phone);
@@ -138,7 +96,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
             phoneNumber: phone,
             password: _passwordController.text,
             otp: _signupOtpController.text.trim(),
-            dateOfBirth: _formatDate(_dateOfBirth!),
           );
           await _saveAndNavigate(phone, isNewUser: true);
         }
@@ -366,35 +323,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                     const SizedBox(height: 14),
                   ],
 
-                  if (_mode == _PhoneAuthMode.signup) ...[
-                    GestureDetector(
-                      onTap: _isLoading ? null : _pickDateOfBirth,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.white.withOpacity(0.07),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.cake_outlined, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
-                            const SizedBox(width: 12),
-                            Text(
-                              _dateOfBirth == null ? l10n.authDateOfBirth : _formatDate(_dateOfBirth!),
-                              style: TextStyle(
-                                color: _dateOfBirth == null ? Colors.white.withOpacity(0.3) : Colors.white,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
                   if (_mode == _PhoneAuthMode.signup && _signupOtpSent) ...[
                     _buildTextField(
                       controller: _signupOtpController,
@@ -472,7 +400,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                               _confirmController.clear();
                               _signupOtpSent = false;
                               _signupOtpController.clear();
-                              _dateOfBirth = null;
                             });
                           },
                           child: Text(

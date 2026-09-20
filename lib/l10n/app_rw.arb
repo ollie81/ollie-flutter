@@ -142,18 +142,10 @@
   "onboardingNameHint": "Izina ryawe",
 
   "authGoogleNoIdToken": "Kwinjira na Google byanze: nta ID token yagaruwe",
-  "authMinAgeRequired": "Ugomba kuba ufite byibura imyaka {age} kugira ngo ufungure konti",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "Kwinjira na Google byanze: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "Hasigaye ikintu kimwe",
-  "authDobHint": "Dukeneye itariki yawe y'amavuko kugira ngo turangize gushyiraho konti yawe.",
-  "authDateOfBirth": "Itariki y'amavuko",
-  "authContinue": "Komeza",
   "authWelcomeTitle": "Murakaza neza kuri Ollie",
   "authSignInToContinue": "Injira kugira ngo ukomeze",
   "authContinueWithGoogle": "Komeza na Google",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "Andika ijambo ry'ibanga",
   "emailAuthErrorPasswordTooShort": "Ijambo ry'ibanga rigomba kuba nibura inyuguti 6",
   "emailAuthErrorPasswordMismatch": "Amagambo y'ibanga ntabwo ahuye",
-  "emailAuthErrorEnterDob": "Andika itariki yawe y'amavuko",
   "emailAuthErrorEnterCode": "Andika kode",
   "emailAuthCodeSent": "Kode yoherejwe kuri email yawe",
   "emailAuthEnterCodeSentHint": "Andika kode yoherejwe kuri email yawe",

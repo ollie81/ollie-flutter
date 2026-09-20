@@ -142,18 +142,10 @@
   "onboardingNameHint": "Jina lako",
 
   "authGoogleNoIdToken": "Kuingia kwa Google kumeshindikana: hakuna ID token iliyorudishwa",
-  "authMinAgeRequired": "Lazima uwe na umri wa angalau miaka {age} kufungua akaunti",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "Kuingia kwa Google kumeshindikana: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "Jambo moja zaidi",
-  "authDobHint": "Tunahitaji tarehe yako ya kuzaliwa kukamilisha kusanidi akaunti yako.",
-  "authDateOfBirth": "Tarehe ya kuzaliwa",
-  "authContinue": "Endelea",
   "authWelcomeTitle": "Karibu kwenye Ollie",
   "authSignInToContinue": "Ingia ili kuendelea",
   "authContinueWithGoogle": "Endelea na Google",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "Ingiza nenosiri",
   "emailAuthErrorPasswordTooShort": "Nenosiri lazima liwe na angalau herufi 6",
   "emailAuthErrorPasswordMismatch": "Manenosiri hayafanani",
-  "emailAuthErrorEnterDob": "Ingiza tarehe yako ya kuzaliwa",
   "emailAuthErrorEnterCode": "Ingiza kode",
   "emailAuthCodeSent": "Kode imetumwa kwa barua pepe yako",
   "emailAuthEnterCodeSentHint": "Ingiza kode iliyotumwa kwa barua pepe yako",

@@ -38,25 +38,6 @@ class _AuthScreenState extends State<AuthScreen> {
   static const String _googleServerClientId =
       '431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com';
 
-  // Same bar as email/phone signup (auth.py's MIN_SIGNUP_AGE_YEARS) --
-  // checked here first for instant feedback, then enforced again
-  // server-side regardless, same as those two screens.
-  static const int _minSignupAgeYears = 13;
-
-  int _calculateAge(DateTime dob) {
-    final now = DateTime.now();
-    int age = now.year - dob.year;
-    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
-      age--;
-    }
-    return age;
-  }
-
-  // Serializes a date for the backend (auth.py expects YYYY-MM-DD) --
-  // not a display formatter, so it stays locale-independent on purpose.
-  String _formatDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
   // ============================================================
   // GOOGLE LOGIN
   // ============================================================
@@ -84,25 +65,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       // googleLogin() already saves tokens to secure storage
       // internally — no need to duplicate that here.
-      var result = await _api.googleLogin(idToken: idToken);
-
-      // Google never hands over a birthdate -- a genuinely new
-      // account isn't created yet at this point, just gated on one.
-      if (result['needs_date_of_birth'] == true) {
-        final dob = await _collectDateOfBirth();
-        if (dob == null) {
-          // Cancelled -- nothing was ever created, just drop the
-          // Google session so a retry starts clean.
-          await googleSignIn.signOut();
-          return;
-        }
-        if (_calculateAge(dob) < _minSignupAgeYears) {
-          _showError(l10n.authMinAgeRequired(_minSignupAgeYears));
-          await googleSignIn.signOut();
-          return;
-        }
-        result = await _api.googleLogin(idToken: idToken, dateOfBirth: _formatDate(dob));
-      }
+      final result = await _api.googleLogin(idToken: idToken);
 
       final isNewUser = result['is_new_user'] == true;
       final googleName = result['username'] as String?;
@@ -127,109 +90,6 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  // Bottom sheet asking for date of birth, shown only when the
-  // backend reports this Google account is brand new. Returns null
-  // if the user backs out without picking a date.
-  Future<DateTime?> _collectDateOfBirth() {
-    final l10n = AppLocalizations.of(context)!;
-    DateTime? picked;
-    return showModalBottomSheet<DateTime>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            return Container(
-              padding: EdgeInsets.fromLTRB(24, 28, 24, 24 + MediaQuery.of(sheetContext).viewInsets.bottom),
-              decoration: const BoxDecoration(
-                color: Color(0xFF151829),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.authOneMoreThing,
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    l10n.authDobHint,
-                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
-                  ),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final result = await showDatePicker(
-                        context: sheetContext,
-                        // Typing "01/15/1990" beats hunting through a
-                        // calendar grid for a birth date that's often
-                        // decades back -- still one tap away from the
-                        // calendar view via the icon in the dialog.
-                        initialEntryMode: DatePickerEntryMode.input,
-                        initialDate: DateTime(now.year - 18, now.month, now.day),
-                        firstDate: DateTime(now.year - 100),
-                        lastDate: now,
-                      );
-                      if (result != null) setSheetState(() => picked = result);
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: Colors.white.withOpacity(0.07),
-                        border: Border.all(color: Colors.white.withOpacity(0.1)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.cake_outlined, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
-                          const SizedBox(width: 12),
-                          Text(
-                            picked == null ? l10n.authDateOfBirth : _formatDate(picked!),
-                            style: TextStyle(
-                              color: picked == null ? Colors.white.withOpacity(0.3) : Colors.white,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: picked == null ? null : () => Navigator.pop(sheetContext, picked),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        gradient: LinearGradient(
-                          colors: picked == null
-                              ? [const Color(0xFFFF8C6B).withOpacity(0.4), const Color(0xFFE86B4A).withOpacity(0.4)]
-                              : const [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          l10n.authContinue,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _registerFcmToken() async {

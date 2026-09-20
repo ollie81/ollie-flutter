@@ -142,18 +142,10 @@
   "onboardingNameHint": "你的名字",
 
   "authGoogleNoIdToken": "Google 登录失败：未返回 ID 令牌",
-  "authMinAgeRequired": "你必须年满 {age} 岁才能创建账户",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "Google 登录失败：{error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "还差一步",
-  "authDobHint": "我们需要你的出生日期来完成账户设置。",
-  "authDateOfBirth": "出生日期",
-  "authContinue": "继续",
   "authWelcomeTitle": "欢迎使用 Ollie",
   "authSignInToContinue": "登录以继续",
   "authContinueWithGoogle": "使用 Google 继续",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "请输入密码",
   "emailAuthErrorPasswordTooShort": "密码必须至少 6 个字符",
   "emailAuthErrorPasswordMismatch": "两次输入的密码不一致",
-  "emailAuthErrorEnterDob": "请输入你的出生日期",
   "emailAuthErrorEnterCode": "请输入验证码",
   "emailAuthCodeSent": "验证码已发送到你的邮箱",
   "emailAuthEnterCodeSentHint": "请输入发送到你邮箱的验证码",

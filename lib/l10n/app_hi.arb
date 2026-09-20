@@ -142,18 +142,10 @@
   "onboardingNameHint": "आपका नाम",
 
   "authGoogleNoIdToken": "Google साइन-इन विफल: कोई ID टोकन नहीं मिला",
-  "authMinAgeRequired": "खाता बनाने के लिए आपकी उम्र कम से कम {age} साल होनी चाहिए",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "Google साइन-इन विफल: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "बस एक और बात",
-  "authDobHint": "आपका खाता पूरा करने के लिए हमें आपकी जन्मतिथि चाहिए।",
-  "authDateOfBirth": "जन्मतिथि",
-  "authContinue": "जारी रखें",
   "authWelcomeTitle": "Ollie में आपका स्वागत है",
   "authSignInToContinue": "जारी रखने के लिए साइन इन करें",
   "authContinueWithGoogle": "Google से जारी रखें",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "पासवर्ड डालें",
   "emailAuthErrorPasswordTooShort": "पासवर्ड कम से कम 6 अक्षरों का होना चाहिए",
   "emailAuthErrorPasswordMismatch": "पासवर्ड मेल नहीं खाते",
-  "emailAuthErrorEnterDob": "अपनी जन्मतिथि डालें",
   "emailAuthErrorEnterCode": "कोड डालें",
   "emailAuthCodeSent": "आपके ईमेल पर कोड भेजा गया",
   "emailAuthEnterCodeSentHint": "अपने ईमेल पर भेजा गया कोड डालें",

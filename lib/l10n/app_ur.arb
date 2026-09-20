@@ -142,18 +142,10 @@
   "onboardingNameHint": "آپ کا نام",
 
   "authGoogleNoIdToken": "Google سائن اِن ناکام: کوئی ID ٹوکن نہیں ملا",
-  "authMinAgeRequired": "اکاؤنٹ بنانے کے لیے آپ کی عمر کم از کم {age} سال ہونی چاہیے",
-  "@authMinAgeRequired": {
-    "placeholders": { "age": { "type": "int" } }
-  },
   "authGoogleFailed": "Google سائن اِن ناکام: {error}",
   "@authGoogleFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
-  "authOneMoreThing": "بس ایک اور بات",
-  "authDobHint": "آپ کا اکاؤنٹ مکمل کرنے کے لیے ہمیں آپ کی تاریخ پیدائش درکار ہے۔",
-  "authDateOfBirth": "تاریخ پیدائش",
-  "authContinue": "جاری رکھیں",
   "authWelcomeTitle": "Ollie میں خوش آمدید",
   "authSignInToContinue": "جاری رکھنے کے لیے سائن اِن کریں",
   "authContinueWithGoogle": "Google کے ساتھ جاری رکھیں",
@@ -166,7 +158,6 @@
   "emailAuthErrorEnterPassword": "پاس ورڈ درج کریں",
   "emailAuthErrorPasswordTooShort": "پاس ورڈ کم از کم 6 حروف کا ہونا چاہیے",
   "emailAuthErrorPasswordMismatch": "پاس ورڈ میل نہیں کھاتے",
-  "emailAuthErrorEnterDob": "اپنی تاریخ پیدائش درج کریں",
   "emailAuthErrorEnterCode": "کوڈ درج کریں",
   "emailAuthCodeSent": "آپ کے ای میل پر کوڈ بھیج دیا گیا",
   "emailAuthEnterCodeSentHint": "اپنے ای میل پر بھیجا گیا کوڈ درج کریں",
