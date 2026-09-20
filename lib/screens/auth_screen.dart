@@ -167,6 +167,11 @@ class _AuthScreenState extends State<AuthScreen> {
                       final now = DateTime.now();
                       final result = await showDatePicker(
                         context: sheetContext,
+                        // Typing "01/15/1990" beats hunting through a
+                        // calendar grid for a birth date that's often
+                        // decades back -- still one tap away from the
+                        // calendar view via the icon in the dialog.
+                        initialEntryMode: DatePickerEntryMode.input,
                         initialDate: DateTime(now.year - 18, now.month, now.day),
                         firstDate: DateTime(now.year - 100),
                         lastDate: now,
