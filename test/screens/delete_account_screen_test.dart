@@ -10,10 +10,15 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ollie_app/l10n/generated/app_localizations.dart';
 import 'package:ollie_app/screens/delete_account_screen.dart';
 
 Future<void> _pumpScreen(WidgetTester tester) async {
-  await tester.pumpWidget(const MaterialApp(home: DeleteAccountScreen()));
+  await tester.pumpWidget(const MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: DeleteAccountScreen(),
+  ));
 }
 
 Finder get _deleteButton => find.widgetWithText(ElevatedButton, 'Delete my account');
