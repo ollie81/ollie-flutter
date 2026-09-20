@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'l10n/locale_controller.dart';
+import 'l10n/material_fallback_delegates.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -77,7 +78,16 @@ class OllieApp extends StatelessWidget {
           title: 'Ollie',
           debugShowCheckedModeBanner: false,
           locale: locale,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+            ...AppLocalizations.localizationsDelegates,
+            // These three only ever get used for a locale (currently
+            // just 'rw') where the real Global*Localizations delegates
+            // above report isSupported() == false and Localizations
+            // skips them entirely -- see material_fallback_delegates.dart.
+            const FallbackMaterialLocalizationsDelegate(),
+            const FallbackCupertinoLocalizationsDelegate(),
+            const FallbackWidgetsLocalizationsDelegate(),
+          ],
           supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData(
             brightness: Brightness.dark,
