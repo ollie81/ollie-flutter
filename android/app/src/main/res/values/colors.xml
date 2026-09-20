@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches ThemeData.scaffoldBackgroundColor in lib/main.dart -- the
+         app always renders dark regardless of the system's light/dark
+         setting, so the native window background (shown before Flutter's
+         first frame, and briefly on resume from an external Activity like
+         the Google Sign-In account picker) needs to match unconditionally
+         too, not just in a values-night variant. Otherwise that native
+         background falls back to the OS default (white in light mode),
+         which is what shows as a stray white screen right after picking a
+         Google account. -->
+    <color name="app_background">#0D0F1A</color>
+</resources>
