@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Matches ThemeData.scaffoldBackgroundColor in lib/main.dart -- the
+    <!-- Matches ThemeData.scaffoldBackgroundColor in lib/main.dart: the
          app always renders dark regardless of the system's light/dark
          setting, so the native window background (shown before Flutter's
          first frame, and briefly on resume from an external Activity like

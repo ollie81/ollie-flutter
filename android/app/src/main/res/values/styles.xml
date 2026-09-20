@@ -12,9 +12,9 @@
          running.
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
-    <!-- Hardcoded to the app's own always-dark background (not
-         ?android:colorBackground, which follows system light/dark and
-         defaults to white here) -- this is what briefly shows through on
+    <!-- Hardcoded to the app's own always-dark background, not
+         ?android:colorBackground (which follows system light/dark and
+         defaults to white here): this is what briefly shows through on
          resume from an external Activity, like the Google Sign-In account
          picker, before Flutter redraws its next frame. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">

@@ -13,7 +13,7 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <!-- Hardcoded to the app's own always-dark background rather than
-         ?android:colorBackground -- see values/styles.xml's NormalTheme
+         ?android:colorBackground; see values/styles.xml's NormalTheme
          for why (this app doesn't actually change appearance between
          system light/dark, so both variants should match exactly). -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
