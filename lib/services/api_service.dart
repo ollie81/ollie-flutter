@@ -36,6 +36,28 @@ class ApiService {
     return await _storage.read(key: 'access_token');
   }
 
+  // Reads the access token's own "sub" claim rather than an extra
+  // request for an id the app already has -- same decode-it-locally
+  // approach googleLogin uses below for the Google ID token's email.
+  // Used only for building a share link.
+  Future<String?> getOwnUserId() async {
+    final token = await getAccessToken();
+    if (token == null) return null;
+    try {
+      final payload = token.split('.')[1];
+      String normalized = payload;
+      while (normalized.length % 4 != 0) {
+        normalized += '=';
+      }
+      final decoded = jsonDecode(
+        String.fromCharCodes(base64.decode(normalized)),
+      );
+      return decoded['sub'] as String?;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<String?> getRefreshToken() async {
     return await _storage.read(key: 'refresh_token');
   }
@@ -845,12 +867,13 @@ class ApiService {
   // GOOGLE LOGIN
   // ============================================================
 
-  Future<Map<String, dynamic>> googleLogin({required String idToken}) async {
+  Future<Map<String, dynamic>> googleLogin({required String idToken, String? referredBy}) async {
     final response = await _publicRequest(
       method: 'POST',
       endpoint: '/auth/google',
       body: {
         'id_token': idToken,
+        if (referredBy != null) 'referred_by': referredBy,
       },
     );
 

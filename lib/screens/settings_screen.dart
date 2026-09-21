@@ -157,6 +157,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _shareOllie() async {
+    final l10n = AppLocalizations.of(context)!;
+    final userId = await _api.getOwnUserId();
+    final url = 'https://ourollie.space/auth${userId != null ? '?ref=$userId' : ''}';
+    try {
+      await SharePlus.instance.share(
+        ShareParams(text: l10n.settingsShareText, uri: Uri.parse(url)),
+      );
+    } catch (e) {
+      // The native share sheet being dismissed also lands here on
+      // some platforms -- not worth showing an error for that.
+    }
+  }
+
   Future<void> _openSubscriptionManagement() async {
     final l10n = AppLocalizations.of(context)!;
     final uri = Uri.parse('https://play.google.com/store/account/subscriptions');
@@ -538,6 +552,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _sectionLabel(l10n.settingsSectionAccount),
                 _infoTile(Icons.phone_android, l10n.settingsPhoneNumber, widget.phoneNumber),
+                _actionTile(
+                  Icons.share_outlined,
+                  l10n.settingsShareOllie,
+                  onTap: _shareOllie,
+                ),
                 _actionTile(
                   Icons.logout,
                   l10n.settingsLogOut,
