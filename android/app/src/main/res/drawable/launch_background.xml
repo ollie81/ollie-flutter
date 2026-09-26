@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Matches the app's own dark scaffold background (see main.dart's
+     ThemeData) exactly, so there's no color flash between this native
+     splash and Flutter's first frame -- previously this was the
+     unmodified template default (@android:color/white), a jarring
+     white flash before an otherwise all-dark app. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+    <item android:drawable="#0D0F1A" />
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@mipmap/ic_launcher" />
+    </item>
 </layer-list>
