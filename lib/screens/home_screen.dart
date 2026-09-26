@@ -286,17 +286,29 @@ class _HomeScreenState extends State<HomeScreen>
             ? "Good afternoon"
             : "Good evening";
 
-    // Contextual when there's something real to reference (an
-    // active goal) -- falls back to the generic line rather than
-    // ever inventing one. When contextual, the third line (which
-    // would just be a rephrasing of the same thing) is dropped
-    // entirely to keep the header compact.
+    // Contextual when there's something real to reference, in order
+    // of how personal it is: a live line Ollie actually generated
+    // today (see /journey/'s home_highlight -- the same text it
+    // already sends as the morning push notification, just also
+    // saved this time), then an active goal, then the generic
+    // fallback -- never inventing either. Whenever it's contextual,
+    // the third line (which would just be a rephrasing of the same
+    // thing) is dropped entirely to keep the header compact.
+    final homeHighlight = (_journey?['home_highlight'] as String?)?.trim();
+    final hasHighlight = homeHighlight != null && homeHighlight.isNotEmpty;
+
     final activeGoals = _activeGoals;
-    final hasContext = activeGoals.isNotEmpty &&
+    final hasGoalContext = activeGoals.isNotEmpty &&
         (activeGoals.first['title'] as String? ?? '').trim().isNotEmpty;
-    final headline = hasContext
-        ? "you've got \"${activeGoals.first['title']}\" to work on today"
-        : 'How are you feeling today?';
+
+    final hasContext = hasHighlight || hasGoalContext;
+    // Checked directly (not via hasHighlight) so Dart can actually
+    // narrow homeHighlight to a non-nullable String here.
+    final headline = homeHighlight != null && homeHighlight.isNotEmpty
+        ? homeHighlight
+        : hasGoalContext
+            ? "you've got \"${activeGoals.first['title']}\" to work on today"
+            : 'How are you feeling today?';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
@@ -318,6 +330,8 @@ class _HomeScreenState extends State<HomeScreen>
                 const SizedBox(height: 8),
                 Text(
                   headline,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 24,
