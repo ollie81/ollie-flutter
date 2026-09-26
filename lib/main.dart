@@ -20,18 +20,49 @@ import 'services/purchase_service.dart';
 // FIREBASE_CREDENTIALS_JSON on the backend.
 const String _sentryDsn = '';
 
+// Resolves once Firebase core is ready -- awaited by anything that
+// touches a Firebase-dependent API (see AuthWrapper._refreshFcmToken
+// below) instead of assuming it's already done, now that startup no
+// longer blocks on it. Nothing needs this before the first frame:
+// AuthWrapper's own login check only reads SharedPreferences.
+Future<void>? firebaseReady;
+
+Future<void> _initFirebaseAndNotifications() async {
+  try {
+    await firebaseReady;
+    await NotificationService.init();
+    await NotificationService.setupFirebase();
+  } catch (e) {
+    debugPrint('notification init failed (non-fatal): $e');
+  }
+}
+
+Future<void> _initAds() async {
+  try {
+    await MobileAds.instance.initialize();
+  } catch (e) {
+    debugPrint('ads init failed (non-fatal): $e');
+  }
+}
+
 Future<void> _initApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp();
-
-  // Initialize notifications
-  await NotificationService.init();
-  await NotificationService.setupFirebase();
-
-  // Initialize Google Ads
-  await MobileAds.instance.initialize();
+  // Firebase, push notifications, and the ads SDK all only matter
+  // once someone is actually past login and using the app -- none of
+  // them gate the first frame. Previously all three were awaited
+  // here, in sequence, before runApp() ever ran, so a slow network
+  // (Firebase, and especially Google Mobile Ads' SDK init, both do
+  // real network calls) left people staring at a blank splash for
+  // however long the slowest of them took, with zero feedback that
+  // anything was happening -- long enough, per login analytics, that
+  // most people never made it past that screen at all. Kicking these
+  // off without awaiting them here lets runApp() fire immediately;
+  // each one still fully initializes (and swallows its own errors),
+  // just after the app is already visible and interactive.
+  firebaseReady = Firebase.initializeApp();
+  _initFirebaseAndNotifications();
+  _initAds();
 
   // Start listening for purchase updates as early as possible, so a
   // purchase that resolves after the app was closed (or completes
@@ -125,9 +156,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _refreshFcmToken() async {
-    final fcmToken = await NotificationService.getFCMToken();
-    if (fcmToken != null) {
-      await _api.saveFcmToken(fcmToken);
+    try {
+      // Firebase no longer finishes initializing before runApp() --
+      // see main()'s firebaseReady -- so anything Firebase-dependent
+      // has to wait for it explicitly rather than assume it's ready.
+      await firebaseReady;
+      final fcmToken = await NotificationService.getFCMToken();
+      if (fcmToken != null) {
+        await _api.saveFcmToken(fcmToken);
+      }
+    } catch (e) {
+      // Best-effort, same as this method's call site already treats
+      // it -- never worth surfacing to the user.
     }
   }
 
@@ -138,9 +178,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
   // after login state is confirmed, rather than in main() before
   // runApp() -- navigatorKey isn't attached to anything that early.
   Future<void> _openChatIfLaunchedFromNotification() async {
-    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null) {
-      await NotificationService.openChatFromNotification();
+    try {
+      await firebaseReady;
+      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) {
+        await NotificationService.openChatFromNotification();
+      }
+    } catch (e) {
+      // Best-effort -- a cold-start notification tap not being
+      // honored is far better than this crashing the login flow.
     }
   }
 
