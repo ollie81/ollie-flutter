@@ -267,8 +267,7 @@ class _HomeScreenState extends State<HomeScreen>
                   _buildJourneyStrip(),
                   Expanded(child: _buildMainOrb()),
                   _buildQuickActions(),
-                  const SizedBox(height: 12),
-                  _buildBottomPanel(),
+                  const SizedBox(height: 28),
                 ],
               ),
             ],
@@ -460,13 +459,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildBottomPanel() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
-      child: _startButton(),
-    );
-  }
-
   // "Your journey" preview -- a subtle strip above the orb, only
   // shown when there's something real to reference (never a
   // promotional empty state). Reuses /journey/ data already loaded
@@ -587,50 +579,6 @@ class _HomeScreenState extends State<HomeScreen>
             Text(
               action.label,
               style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _startButton() {
-    return GestureDetector(
-      onTap: _openChat,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF8C6B).withOpacity(0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Start chatting',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(
-              Icons.arrow_forward_rounded,
-              color: Colors.white,
-              size: 18,
             ),
           ],
         ),
