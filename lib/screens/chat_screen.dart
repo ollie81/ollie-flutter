@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
+import 'auth_screen.dart';
 import 'paywall_screen.dart';
 import 'notifications_screen.dart';
 import 'chat_search_screen.dart';
@@ -430,26 +431,136 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _messages.add(ollieMessage);
       });
       _applyStreak(response);
+      _warnIfGuestMessagesLow(response);
       _scrollToBottom();
       _maybeAutoSpeak(ollieMessage);
     } catch (e) {
+      final isGuestLimit = e.toString().contains(guestMessageLimitDetail);
       setState(() {
         _isTyping = false;
-        // Daily-limit has its own recovery sheet below -- only a
-        // real failure (expired session, no signal, server error)
-        // leaves the bubble looking sent with nothing the user can
-        // do about it, so only that case gets marked failed.
-        if (!e.toString().contains('Daily limit reached')) {
+        // Daily-limit and guest-limit each have their own recovery
+        // sheet below -- only a real failure (expired session, no
+        // signal, server error) leaves the bubble looking sent with
+        // nothing the user can do about it, so only that case gets
+        // marked failed.
+        if (!isGuestLimit && !e.toString().contains('Daily limit reached')) {
           sentMessage?.failed = true;
         }
       });
 
-      if (e.toString().contains('Daily limit reached')) {
+      if (isGuestLimit) {
+        _showGuestLimitReachedSheet();
+      } else if (e.toString().contains('Daily limit reached')) {
         _showLimitReachedSheet(userMessage);
       } else {
         _showError(e.toString().replaceFirst('Exception: ', ''));
       }
     }
+  }
+
+  // Once a guest's remaining messages drops to this many (or fewer),
+  // a heads-up shows before the wall instead of only enforcing it at
+  // zero -- same threshold/spirit as ollie-web's Chat.tsx.
+  static const int _guestLowMessagesThreshold = 3;
+
+  void _warnIfGuestMessagesLow(Map<String, dynamic> response) {
+    final remaining = response['guest_messages_remaining'];
+    if (remaining is! int || remaining > _guestLowMessagesThreshold) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          remaining == 1
+              ? '1 message left — sign up so Ollie remembers you'
+              : '$remaining messages left — sign up so Ollie remembers you',
+        ),
+        backgroundColor: const Color(0xFF1A1035),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        action: SnackBarAction(
+          label: 'Sign up',
+          textColor: const Color(0xFFFF8C6B),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AuthScreen()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showGuestLimitReachedSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1035),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "sign up so Ollie remembers you tomorrow",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "you've used all your free guest messages — create an account to keep talking to Ollie",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8C6B),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    );
+                  },
+                  child: const Text(
+                    'Sign up',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _retryFailedMessage(ChatMessage message) async {

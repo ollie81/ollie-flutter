@@ -78,9 +78,16 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
 
+      // If this device was already chatting as a guest, this
+      // upgrades that same account in place (same chat history,
+      // same id) instead of creating a second, disconnected one --
+      // see auth.py's _resolve_guest_upgrade. null if there was no
+      // guest session, which googleLogin treats as a normal signup.
+      final guestId = await _api.getGuestId();
+
       // googleLogin() already saves tokens to secure storage
       // internally — no need to duplicate that here.
-      var result = await _api.googleLogin(idToken: idToken);
+      var result = await _api.googleLogin(idToken: idToken, guestId: guestId);
 
       // Google never hands over a birthdate -- a genuinely new
       // account isn't created yet at this point, just gated on one.
@@ -97,7 +104,7 @@ class _AuthScreenState extends State<AuthScreen> {
           await googleSignIn.signOut();
           return;
         }
-        result = await _api.googleLogin(idToken: idToken, dateOfBirth: _formatDate(dob));
+        result = await _api.googleLogin(idToken: idToken, dateOfBirth: _formatDate(dob), guestId: guestId);
       }
 
       final isNewUser = result['is_new_user'] == true;
