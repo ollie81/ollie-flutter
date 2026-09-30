@@ -1,8 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 import 'auth_screen.dart';
+import 'home_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
+// First screen on a fresh install. "Get Started" used to go straight
+// to AuthScreen (a signup wall before anyone had even tried Ollie) --
+// now it silently starts a guest session instead, same "no friction
+// before the first message" change ollie-web's Landing already
+// shipped (see its App.tsx/RequireAuth). Signing up for real is
+// still fully available from inside the app (Settings, or the "sign
+// up" prompt once the guest message cap gets close) -- it's just no
+// longer the first thing anyone has to do.
+class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
+
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  final ApiService _api = ApiService();
+  bool _startingGuest = false;
+
+  Future<void> _getStarted() async {
+    if (_startingGuest) return;
+    setState(() => _startingGuest = true);
+    try {
+      await _api.guestLogin();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setString('phoneNumber', 'Guest');
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen(phoneNumber: 'Guest')),
+      );
+    } catch (e) {
+      // A genuine failure (no signal, backend hiccup) -- not "never
+      // let anyone in", just fall back to the real sign-up/sign-in
+      // screen so there's still a way forward.
+      if (!mounted) return;
+      setState(() => _startingGuest = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't connect — check your signal and try again, or sign in below."),
+          backgroundColor: Color(0xFFE53935),
+        ),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,24 +125,27 @@ class WelcomeScreen extends StatelessWidget {
                     fontSize: 16,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Free to start · no signup needed',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 48),
                 // Get Started Button
                 GestureDetector(
-                  onTap: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AuthScreen(),
-                      ),
-                    );
-                  },
+                  onTap: _getStarted,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(28),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
+                      gradient: LinearGradient(
+                        colors: _startingGuest
+                            ? [const Color(0xFFFF8C6B).withValues(alpha: 0.6), const Color(0xFFE86B4A).withValues(alpha: 0.6)]
+                            : const [Color(0xFFFF8C6B), Color(0xFFE86B4A)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -103,25 +157,46 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Get Started',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
+                    child: _startingGuest
+                        ? const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Get Started',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ],
                           ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(
-                          Icons.arrow_forward,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ],
-                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _startingGuest
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const AuthScreen()),
+                          ),
+                  child: Text(
+                    'Already have an account? Sign in',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
                   ),
                 ),
               ],
