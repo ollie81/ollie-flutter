@@ -102,7 +102,7 @@ class TermsOfServiceScreen extends StatelessWidget {
             _bullet('[Insert governing law / jurisdiction here before publishing.]'),
           ]),
           _section('Contact us', [
-            _bullet('Questions about these terms: [add a real contact email before publishing].'),
+            _bullet('Questions about these terms: oneorgone@gmail.com.'),
           ]),
           const SizedBox(height: 12),
           _draftNotice(),
