@@ -39,13 +39,11 @@
             android:value="2"/>
 
         <!-- Required by google_mobile_ads — app crashes on launch
-             without this. Test ID below is Google's official test
-             App ID, safe for development. Swap for your real AdMob
-             App ID (found in AdMob console > App settings) before
-             public release. -->
+             without this. Real AdMob App ID for the "ollie" app
+             (see AdMob console > Apps > ollie). -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-4006935524883605~8131148752"/>
     </application>
     
     <queries>
