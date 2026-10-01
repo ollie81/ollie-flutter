@@ -99,10 +99,11 @@ class TermsOfServiceScreen extends StatelessWidget {
                 'updated terms.'),
           ]),
           _section('Governing law', [
-            _bullet('[Insert governing law / jurisdiction here before publishing.]'),
+            _bullet('These terms are governed by the laws of Rwanda, without regard to '
+                'conflict-of-law principles.'),
           ]),
           _section('Contact us', [
-            _bullet('Questions about these terms: [add a real contact email before publishing].'),
+            _bullet('Questions about these terms: oneorgone@gmail.com.'),
           ]),
           const SizedBox(height: 12),
           _draftNotice(),
