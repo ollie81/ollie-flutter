@@ -127,8 +127,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // ============================================================
   // AD-REWARD STATE
   // ============================================================
+  // Real rewarded ad unit for the "ollie" AdMob app -- grants
+  // grant_ad_bonus's 10-minute unlimited window (see database.py),
+  // matching this unit's configured reward (10 minutes).
   static const String _rewardedAdUnitId =
-      'ca-app-pub-3940256099942544/5224354917';
+      'ca-app-pub-4006935524883605/4976356397';
 
   RewardedAd? _rewardedAd;
 
