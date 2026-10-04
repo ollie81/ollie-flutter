@@ -51,6 +51,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "431417738635-4h5tht1nuq0r5farv0u24k0bu966apqb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.oliviranzi.ollie",
+            "certificate_hash": "b84ca91fc3b36d26ec6afd8a141f8c54162042f4"
+          }
+        },
+        {
           "client_id": "431417738635-piboatgv2eib1kn750ihuobmus97a3iq.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
