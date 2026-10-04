@@ -51,11 +51,19 @@
       },
       "oauth_client": [
         {
-          "client_id": "431417738635-oasrvakde7vqsglg481q73301pfpgsve.apps.googleusercontent.com",
+          "client_id": "431417738635-4h5tht1nuq0r5farv0u24k0bu966apqb.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.oliviranzi.ollie",
-            "certificate_hash": "f40f77e913832fd7124f1abe24488921f256278e"
+            "certificate_hash": "b84ca91fc3b36d26ec6afd8a141f8c54162042f4"
+          }
+        },
+        {
+          "client_id": "431417738635-piboatgv2eib1kn750ihuobmus97a3iq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.oliviranzi.ollie",
+            "certificate_hash": "4aa555b3ce347b2279f8aef97ffc6abd7099545d"
           }
         },
         {
