@@ -59,6 +59,14 @@
           }
         },
         {
+          "client_id": "431417738635-piboatgv2eib1kn750ihuobmus97a3iq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.oliviranzi.ollie",
+            "certificate_hash": "4aa555b3ce347b2279f8aef97ffc6abd7099545d"
+          }
+        },
+        {
           "client_id": "431417738635-f3ipimjqmdldh0lfsf44f70irif9eoho.apps.googleusercontent.com",
           "client_type": 3
         }
