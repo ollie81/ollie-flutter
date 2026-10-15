@@ -97,7 +97,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             _bullet('If this policy changes in a way that matters, we\'ll let you know in the app.'),
           ]),
           _section('Contact us', [
-            _bullet('Questions about this policy or your data: [add a real contact email before publishing].'),
+            _bullet('Questions about this policy or your data: oneorgone@gmail.com.'),
           ]),
           const SizedBox(height: 12),
           _draftNotice(),

@@ -556,7 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
 
                 _sectionLabel('About'),
-                _infoTile(Icons.info_outline, 'Ollie', 'Made in Rwanda 🇷🇼'),
+                _infoTile(Icons.info_outline, 'Ollie', 'Version 1.0.0'),
                 _actionTile(
                   Icons.privacy_tip_outlined,
                   'Privacy Policy',

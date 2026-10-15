@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Matches the app's own dark scaffold background (see main.dart's
      ThemeData) exactly, so there's no color flash between this native
-     splash and Flutter's first frame -- previously this was the
+     splash and Flutter's first frame; previously this was the
      unmodified template default (@android:color/white), a jarring
      white flash before an otherwise all-dark app. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="#0D0F1A" />
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0D0F1A" />
+        </shape>
+    </item>
 
     <item>
         <bitmap

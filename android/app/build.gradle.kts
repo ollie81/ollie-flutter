@@ -24,7 +24,7 @@ android {
     }
     defaultConfig {
         applicationId = "com.oliviranzi.ollie"
-        minSdk = 18
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
