@@ -1607,30 +1607,40 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             },
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Ollie',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+          // Flexible + ellipsis on the subtitle: a long mode label
+          // (initialModeLabel can be arbitrary text) combined with a
+          // narrow screen or larger system text-scaling could push
+          // this past the row's width -- without this it would clip
+          // or overflow the header instead of shrinking gracefully.
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Ollie',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              Text(
-                widget.initialModeLabel ?? 'always here',
-                style: TextStyle(
-                  color: widget.initialModeLabel != null
-                      ? const Color(0xFFFF8C6B)
-                      : Colors.grey,
-                  fontSize: 12,
-                  fontWeight: widget.initialModeLabel != null
-                      ? FontWeight.w600
-                      : FontWeight.normal,
+                Text(
+                  widget.initialModeLabel ?? 'always here',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: widget.initialModeLabel != null
+                        ? const Color(0xFFFF8C6B)
+                        : Colors.grey,
+                    fontSize: 12,
+                    fontWeight: widget.initialModeLabel != null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const Spacer(),
           if (_currentStreak > 0) ...[
@@ -1660,22 +1670,35 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         ),
         if (_unreadNotifications > 0)
           Positioned(
-            top: 6,
-            right: 6,
+            top: 4,
+            right: 4,
+            // A thin ring separates the badge from whatever's behind
+            // it (the animated gradient background), so it reads as
+            // one crisp shape instead of blurring into the bell icon
+            // -- the same "refine the weight, don't just shrink or
+            // enlarge it" idea as the glow pass elsewhere.
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              constraints: const BoxConstraints(minWidth: 16),
+              padding: const EdgeInsets.all(1.5),
               decoration: const BoxDecoration(
-                color: Color(0xFFFF8C6B),
-                borderRadius: BorderRadius.all(Radius.circular(8)),
+                color: Color(0xFF1A1035),
+                shape: BoxShape.circle,
               ),
-              child: Text(
-                _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF8C6B),
+                  borderRadius: BorderRadius.all(Radius.circular(9)),
+                ),
+                child: Text(
+                  _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                  ),
                 ),
               ),
             ),
@@ -1761,20 +1784,33 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final isPlayingThis = identical(_playingMessage, message);
 
     if (!isPlayingThis) {
+      // Neutral at rest, accent only once actually playing (the pill
+      // below) -- matches the composer's mic button, which is the
+      // same white-at-rest/accent-when-active pattern, instead of
+      // this being permanently orange-tinted on every single Ollie
+      // message regardless of state. Wrapped to a real 40px tap
+      // target even though the visible badge stays compact -- 30px
+      // was under the accessible minimum.
       return GestureDetector(
         onTap: () => _speakMessage(message),
+        behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFFFF8C6B).withOpacity(0.15),
-            border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
-          ),
-          child: const Icon(
-            Icons.volume_up_rounded,
-            color: Color(0xFFFF8C6B),
-            size: 14,
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.07),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Icon(
+              Icons.volume_up_rounded,
+              color: Colors.white.withOpacity(0.7),
+              size: 15,
+            ),
           ),
         ),
       );
