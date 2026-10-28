@@ -362,7 +362,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     } else if (message.isEmpty) {
       setState(() => _emotionalHeader = "hey there 😊");
     } else {
-      setState(() => _emotionalHeader = "always listening 💡");
+      // Not a literal mic-state indicator -- this banner is cosmetic
+      // mood text (see the branches above), so wording it as
+      // "listening" implied continuous audio capture that was never
+      // actually happening.
+      setState(() => _emotionalHeader = "always here 💡");
     }
   }
 
@@ -1582,9 +1586,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF8C6B).withOpacity(0.5),
-                        blurRadius: 10,
-                        spreadRadius: 2,
+                        color: const Color(0xFFFF8C6B).withOpacity(0.35),
+                        blurRadius: 8,
+                        spreadRadius: 1,
                       ),
                     ],
                   ),
@@ -1631,10 +1635,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           const Spacer(),
           if (_currentStreak > 0) ...[
             _buildStreakBadge(),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
           ],
           IconButton(
-            icon: const Icon(Icons.search_rounded, color: Colors.white),
+            icon: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
             onPressed: _openSearch,
           ),
           _buildNotificationBell(),
@@ -1721,8 +1725,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         border: Border.all(color: const Color(0xFFFF8C6B).withOpacity(0.3)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF8C6B).withOpacity(0.1),
-            blurRadius: 15,
+            color: const Color(0xFFFF8C6B).withOpacity(0.06),
+            blurRadius: 10,
             spreadRadius: 0,
           ),
         ],
@@ -1884,7 +1888,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                               ? EdgeInsets.zero
                               : const EdgeInsets.symmetric(
                                   horizontal: 18,
-                                  vertical: 12,
+                                  vertical: 13,
                                 ),
                           decoration: BoxDecoration(
                             borderRadius: bubbleRadius,
@@ -1917,9 +1921,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                               BoxShadow(
                                 color: message.isOllie
                                     ? Colors.black.withOpacity(0.1)
-                                    : const Color(0xFFFF8C6B).withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
+                                    : const Color(0xFFFF8C6B).withOpacity(0.18),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
@@ -1952,7 +1956,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 15,
-                                              height: 1.4,
+                                              height: 1.45,
                                             ),
                                           ),
                                         ),
@@ -1973,7 +1977,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 15,
-                                        height: 1.4,
+                                        height: 1.45,
                                       ),
                                     ),
                                   ],
@@ -2050,6 +2054,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           AnimatedBuilder(
             animation: _orbAnimationController,
             builder: (context, child) {
+              // One glow source, not two stacked ones -- the soft radial
+              // halo IS the glow; the orb itself just needs a slim rim
+              // light, not its own separate hard-edged shadow on top.
               return Container(
                 width: 100,
                 height: 100,
@@ -2057,7 +2064,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFFFF8C6B).withOpacity(0.3),
+                      const Color(0xFFFF8C6B).withOpacity(0.22),
                       const Color(0xFFFF8C6B).withOpacity(0),
                     ],
                   ),
@@ -2072,9 +2079,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFFF8C6B).withOpacity(0.6),
-                          blurRadius: 20,
-                          spreadRadius: 5,
+                          color: const Color(0xFFFF8C6B).withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 1,
                         ),
                       ],
                     ),
@@ -2188,9 +2195,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFF8C6B).withOpacity(opacity * 0.8),
-                  blurRadius: 8,
-                  spreadRadius: 1,
+                  color: const Color(0xFFFF8C6B).withOpacity(opacity * 0.5),
+                  blurRadius: 5,
+                  spreadRadius: 0.5,
                 ),
               ],
             ),
@@ -2220,9 +2227,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               GestureDetector(
                 onTap: _showAttachmentSheet,
                 child: Container(
-                  width: 44,
-                  height: 44,
-                  margin: const EdgeInsets.only(right: 8),
+                  width: 48,
+                  height: 48,
+                  margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white.withOpacity(0.07),
@@ -2231,7 +2238,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   child: Icon(
                     Icons.camera_alt_rounded,
                     color: Colors.white.withOpacity(0.7),
-                    size: 20,
+                    size: 22,
                   ),
                 ),
               ),
@@ -2315,9 +2322,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF8C6B).withOpacity(0.4),
-                        blurRadius: 12,
-                        spreadRadius: 2,
+                        color: const Color(0xFFFF8C6B).withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 1,
                       ),
                     ],
                   ),
