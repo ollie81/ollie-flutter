@@ -44,6 +44,18 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4006935524883605~8131148752"/>
+
+        <!-- Without these, FCM falls back to the full-color launcher
+             icon as the notification's small icon. Android requires
+             that to be a plain white silhouette on transparent, so an
+             unconfigured full-color icon renders wrong (a blank/solid
+             shape) in the status bar and notification shade. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color"/>
     </application>
     
     <queries>

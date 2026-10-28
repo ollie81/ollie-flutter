@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#2D1B4E</color>
+    <!-- Tints the monochrome notification icon in the shade: the
+         same coral used for the accent throughout the rest of the app. -->
+    <color name="notification_color">#FF8C6B</color>
 </resources>
