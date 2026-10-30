@@ -1568,6 +1568,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       child: Row(
         children: [
           IconButton(
+            // Compact density: this header was consistently too
+            // cramped for the name/subtitle column on narrower
+            // screens (verified -- the subtitle was truncating to
+            // "alwa..." on a real device), because four default-
+            // sized IconButtons plus the streak badge left almost no
+            // room for it. Still comfortably tappable, just not
+            // padded to the full default size.
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
@@ -1606,7 +1614,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               );
             },
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           // Flexible + ellipsis on the subtitle: a long mode label
           // (initialModeLabel can be arbitrary text) combined with a
           // narrow screen or larger system text-scaling could push
@@ -1645,9 +1653,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           const Spacer(),
           if (_currentStreak > 0) ...[
             _buildStreakBadge(),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
           ],
           IconButton(
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
             onPressed: _openSearch,
           ),
@@ -1662,6 +1671,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       clipBehavior: Clip.none,
       children: [
         IconButton(
+          visualDensity: VisualDensity.compact,
           icon: const Icon(
             Icons.notifications_none_rounded,
             color: Colors.white,
@@ -1709,7 +1719,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Widget _buildStreakBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: const Color(0xFFFF8C6B).withOpacity(0.15),
