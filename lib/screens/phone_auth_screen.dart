@@ -4,6 +4,7 @@ import 'package:intl_phone_field/phone_number.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import '../widgets/date_of_birth_fields.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
 
@@ -47,33 +48,14 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   bool _otpSent = false;
   bool _signupOtpSent = false;
   final TextEditingController _signupOtpController = TextEditingController();
-  DateTime? _dateOfBirth;
+  // Day/Month/Year boxes -- checked with the same rules as the server
+  // (utils/date_of_birth.dart) before a code is even sent.
+  final DateOfBirthController _dob = DateOfBirthController();
 
-  static const int _minSignupAgeYears = 13;
-
-  int _calculateAge(DateTime dob) {
-    final now = DateTime.now();
-    int age = now.year - dob.year;
-    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
-      age--;
-    }
-    return age;
-  }
-
-  String _formatDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  Future<void> _pickDateOfBirth() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(now.year - 18, now.month, now.day),
-      firstDate: DateTime(now.year - 100),
-      lastDate: now,
-    );
-    if (picked != null) {
-      setState(() => _dateOfBirth = picked);
-    }
+  @override
+  void dispose() {
+    _dob.dispose();
+    super.dispose();
   }
 
   // ============================================================
@@ -107,14 +89,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           _showError('Passwords do not match');
           return;
         }
-        if (_dateOfBirth == null) {
-          _showError('Enter your date of birth');
-          return;
-        }
-        if (_calculateAge(_dateOfBirth!) < _minSignupAgeYears) {
-          _showError('You must be at least $_minSignupAgeYears years old to create an account');
-          return;
-        }
+        // Shown under the boxes (first wrong box focused), not as a
+        // snackbar, so it's right next to what needs fixing.
+        final dob = _dob.validate();
+        if (!dob.isValid) return;
 
         if (!_signupOtpSent) {
           await _api.requestSignupOtp(phoneNumber: phone);
@@ -129,7 +107,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
             phoneNumber: phone,
             password: _passwordController.text,
             otp: _signupOtpController.text.trim(),
-            dateOfBirth: _formatDate(_dateOfBirth!),
+            dateOfBirth: dob.isoDate,
           );
           await _saveAndNavigate(phone, isNewUser: true);
         }
@@ -357,31 +335,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   ],
 
                   if (_mode == _PhoneAuthMode.signup) ...[
-                    GestureDetector(
-                      onTap: _isLoading ? null : _pickDateOfBirth,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.white.withOpacity(0.07),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.cake_outlined, color: const Color(0xFFFF8C6B).withOpacity(0.7), size: 20),
-                            const SizedBox(width: 12),
-                            Text(
-                              _dateOfBirth == null ? 'Date of birth' : _formatDate(_dateOfBirth!),
-                              style: TextStyle(
-                                color: _dateOfBirth == null ? Colors.white.withOpacity(0.3) : Colors.white,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    DateOfBirthFields(controller: _dob, enabled: !_isLoading),
                     const SizedBox(height: 14),
                   ],
 
@@ -447,30 +401,37 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                   const SizedBox(height: 16),
 
                   if (_mode != _PhoneAuthMode.forgot)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _mode == _PhoneAuthMode.login ? "Don't have an account?" : "Already have an account?",
-                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _mode = _mode == _PhoneAuthMode.login ? _PhoneAuthMode.signup : _PhoneAuthMode.login;
-                              _passwordController.clear();
-                              _confirmController.clear();
-                              _signupOtpSent = false;
-                              _signupOtpController.clear();
-                              _dateOfBirth = null;
-                            });
-                          },
-                          child: Text(
-                            _mode == _PhoneAuthMode.login ? 'Sign Up' : 'Sign In',
-                            style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600),
+                    // Wrap, not Row: on a small phone with large system
+                    // text the button would otherwise be pushed off the
+                    // edge of the screen -- and it's the way into signup.
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            _mode == _PhoneAuthMode.login ? "Don't have an account?" : "Already have an account?",
+                            style: TextStyle(color: Colors.white.withOpacity(0.5)),
                           ),
-                        ),
-                      ],
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _mode = _mode == _PhoneAuthMode.login ? _PhoneAuthMode.signup : _PhoneAuthMode.login;
+                                _passwordController.clear();
+                                _confirmController.clear();
+                                _signupOtpSent = false;
+                                _signupOtpController.clear();
+                                _dob.clear();
+                              });
+                            },
+                            child: Text(
+                              _mode == _PhoneAuthMode.login ? 'Sign Up' : 'Sign In',
+                              style: const TextStyle(color: Color(0xFFFF8C6B), fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                   if (_mode == _PhoneAuthMode.login)
