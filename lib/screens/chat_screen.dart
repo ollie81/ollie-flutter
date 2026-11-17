@@ -9,8 +9,10 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../config/store_build.dart';
 import '../services/api_service.dart';
 import '../utils/ad_reward.dart';
+import '../widgets/voice_record_button.dart';
 import 'auth_screen.dart';
 import 'paywall_screen.dart';
 import 'notifications_screen.dart';
@@ -1264,7 +1266,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   // Not awaited -- playback runs in the background, callers don't
   // wait on it before moving on.
   void _maybeAutoSpeak(ChatMessage message) {
-    if (_isPremium) _speakMessage(message);
+    if (_isPremium && !voiceComingSoon) _speakMessage(message);
+  }
+
+  void _showVoiceComingSoon() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("talking with ollie by voice is coming soon 🎙️"),
+        backgroundColor: Color(0xFF2D1B4E),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   void _startPlaybackTimer(ChatMessage message) {
@@ -2045,8 +2059,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-                    // Speaker only on Ollie messages
-                    if (message.isOllie) ...[
+                    // Speaker only on Ollie messages (and not on the
+                    // Play Store build, where voice is "coming soon").
+                    if (message.isOllie && !voiceComingSoon) ...[
                       const SizedBox(width: 8),
                       _buildSpeakerControl(message),
                     ],
@@ -2165,27 +2180,41 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             style: TextStyle(color: Colors.grey.withOpacity(0.7), fontSize: 14),
           ),
           const SizedBox(height: 20),
-          TextButton.icon(
-            onPressed: _isPreviewing ? null : _playVoicePreview,
-            icon: _isPreviewing
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
+          if (voiceComingSoon)
+            TextButton.icon(
+              onPressed: _showVoiceComingSoon,
+              icon: Icon(
+                Icons.volume_up_rounded,
+                color: const Color(0xFFFF8C6B).withValues(alpha: 0.5),
+                size: 18,
+              ),
+              label: Text(
+                "ollie's voice is coming soon",
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: _isPreviewing ? null : _playVoicePreview,
+              icon: _isPreviewing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFFF8C6B),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.volume_up_rounded,
                       color: Color(0xFFFF8C6B),
+                      size: 18,
                     ),
-                  )
-                : const Icon(
-                    Icons.volume_up_rounded,
-                    color: Color(0xFFFF8C6B),
-                    size: 18,
-                  ),
-            label: Text(
-              "hear what ollie sounds like",
-              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+              label: Text(
+                "hear what ollie sounds like",
+                style: TextStyle(color: Colors.white.withOpacity(0.7)),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -2302,45 +2331,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              // Hold to record a voice message, release to send.
-              GestureDetector(
-                onLongPressStart: (_) => _startRecording(),
-                onLongPressEnd: (_) => _stopRecordingAndSend(),
-                onLongPressCancel: () => _stopRecordingAndSend(),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 48,
-                  height: 48,
-                  margin: const EdgeInsets.only(right: 10),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isListening
-                        ? const Color(0xFFE53935).withOpacity(0.25)
-                        : Colors.white.withOpacity(0.07),
-                    border: Border.all(
-                      color: _isListening
-                          ? const Color(0xFFE53935)
-                          : Colors.white.withOpacity(0.1),
-                    ),
-                  ),
-                  child: _isTranscribing
-                      ? const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFFFF8C6B),
-                          ),
-                        )
-                      : Icon(
-                          _isListening
-                              ? Icons.mic_rounded
-                              : Icons.mic_none_rounded,
-                          color: _isListening
-                              ? const Color(0xFFE53935)
-                              : Colors.white.withOpacity(0.7),
-                          size: 22,
-                        ),
-                ),
+              VoiceRecordButton(
+                comingSoon: voiceComingSoon,
+                isListening: _isListening,
+                isTranscribing: _isTranscribing,
+                onStartRecording: _startRecording,
+                onStopRecording: _stopRecordingAndSend,
+                onComingSoon: _showVoiceComingSoon,
               ),
               Expanded(
                 child: Container(

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import '../config/store_build.dart';
 import '../services/purchase_service.dart';
 
 class _Tier {
@@ -18,7 +19,9 @@ const _tiers = [
     PurchaseService.monthlyId,
     'Monthly',
     '\$9.99/mo',
-    'Unlimited messages, voice with Ollie, no ads',
+    voiceComingSoon
+        ? 'Unlimited messages, no ads — voice coming soon'
+        : 'Unlimited messages, voice with Ollie, no ads',
   ),
   _Tier(
     PurchaseService.yearlyId,
@@ -193,8 +196,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
       children: [
         const Icon(Icons.workspace_premium_outlined, color: Color(0xFFFF8C6B), size: 40),
         const SizedBox(height: 12),
+        // The Play Store build doesn't have voice yet (see
+        // config/store_build.dart), so it isn't sold as a perk there.
         const Text(
-          'unlimited messages, real voice conversations, no ads',
+          voiceComingSoon
+              ? 'unlimited messages, no ads — voice coming soon'
+              : 'unlimited messages, real voice conversations, no ads',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
         ),
