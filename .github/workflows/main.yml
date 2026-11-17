@@ -33,8 +33,18 @@ jobs:
       - run: flutter pub get
       - run: flutter test
       - run: dart run flutter_launcher_icons
-      - run: flutter build apk --release --split-per-abi
+      # The build number (Android's versionCode) comes from this
+      # workflow's run counter, so every build is numbered higher than
+      # the last -- Google Play rejects an upload that reuses one, and
+      # pubspec.yaml's "+3" never changed between builds.
+      - run: flutter build apk --release --split-per-abi --build-number=${{ github.run_number }}
+      # Google Play only accepts app bundles (.aab) for new apps.
+      - run: flutter build appbundle --release --build-number=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: ollie-apk
           path: build/app/outputs/flutter-apk/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ollie-aab-for-play-store
+          path: build/app/outputs/bundle/release/app-release.aab
