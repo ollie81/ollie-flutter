@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../utils/ad_reward.dart';
 
 // Must match chat.py's GUEST_MESSAGE_LIMIT_DETAIL exactly -- the
 // /chat route's 429 detail when a guest hits their one-time cap,
@@ -1134,18 +1135,39 @@ class ApiService {
   // ADS
   // ============================================================
 
+  /// Reports a finished rewarded ad. `ssv: true` tells the server
+  /// this app version attached the user id for Google's own reward
+  /// callback (see utils/ad_reward.dart), so once the server only
+  /// trusts that callback it answers "pending" instead of rejecting
+  /// the app as too old.
   Future<Map<String, dynamic>> watchAdBonus() async {
     final response = await _authRequest(
       method: 'POST',
       endpoint: '/premium/watch-ad',
+      body: {'ssv': true},
     );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
+    } else if (response.statusCode == 429) {
+      return {'granted': false, 'limit_reached': true};
     } else {
       throw Exception('Failed to unlock bonus messages');
     }
   }
+
+  /// Whether an ad bonus is running and how many of today's ad
+  /// rewards are used (GET /premium/ad-bonus-status).
+  Future<Map<String, dynamic>> getAdBonusStatus() async {
+    final response = await _authRequest(method: 'GET', endpoint: '/premium/ad-bonus-status');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Could not check ad rewards');
+  }
+
+  /// The signed-in user's id, for Google's reward callback.
+  Future<String?> currentUserId() async => userIdFromAccessToken(await getAccessToken());
 
   // ============================================================
   // GET USER PROFILE

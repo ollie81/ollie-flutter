@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
+import '../utils/ad_reward.dart';
 import 'auth_screen.dart';
 import 'paywall_screen.dart';
 import 'notifications_screen.dart';
@@ -808,13 +809,43 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _watchAdForBonus(String pendingMessage) {
-    if (_rewardedAd == null) {
+    _showRewardedAd(() async {
+      setState(() => _isTyping = true);
+      await _requestOllieReply(pendingMessage);
+    });
+  }
+
+  static const _adLimitMessage = "you've used today's 3 ad rewards — come back tomorrow, or subscribe for unlimited";
+
+  /// Shows the rewarded ad, then runs [onRewardConfirmed] once the
+  /// server confirms the 10-minute bonus. Shared by text and photos.
+  Future<void> _showRewardedAd(Future<void> Function() onRewardConfirmed) async {
+    final ad = _rewardedAd;
+    if (ad == null) {
       _showError("ad not ready yet — try again in a moment");
       _loadRewardedAd();
       return;
     }
 
-    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+    // Don't spend someone's time on an ad that can't pay out.
+    try {
+      if (dailyAdLimitReached(await _api.getAdBonusStatus())) {
+        _showError(_adLimitMessage);
+        return;
+      }
+    } catch (_) {
+      // Couldn't check -- let the server decide after the ad.
+    }
+
+    // Lets Google's own reward callback name this account. The server
+    // can be set to grant the bonus only on that signed callback, so
+    // a modified app can't claim rewards without watching.
+    final userId = await _api.currentUserId();
+    if (userId != null) {
+      await ad.setServerSideOptions(ServerSideVerificationOptions(userId: userId));
+    }
+
+    ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _loadRewardedAd();
@@ -826,12 +857,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       },
     );
 
-    _rewardedAd!.show(
+    ad.show(
       onUserEarnedReward: (ad, reward) async {
         try {
-          await _api.watchAdBonus();
-          setState(() => _isTyping = true);
-          await _requestOllieReply(pendingMessage);
+          final outcome = await confirmAdReward(report: _api.watchAdBonus, status: _api.getAdBonusStatus);
+          // Confirming can take a few seconds; they may have left chat.
+          if (!mounted) return;
+          switch (outcome) {
+            case AdRewardOutcome.granted:
+              await onRewardConfirmed();
+            case AdRewardOutcome.limitReached:
+              _showError(_adLimitMessage);
+            case AdRewardOutcome.notConfirmed:
+              _showError("still confirming your ad — try sending again in a moment");
+          }
         } catch (e) {
           _showError("couldn't unlock bonus messages, try again");
         }
@@ -1190,34 +1229,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _watchAdForImageBonus(File imageFile, String? caption) {
-    if (_rewardedAd == null) {
-      _showError("ad not ready yet — try again in a moment");
-      _loadRewardedAd();
-      return;
-    }
-
-    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        ad.dispose();
-        _loadRewardedAd();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        ad.dispose();
-        _loadRewardedAd();
-        _showError("couldn't show ad, try again");
-      },
-    );
-
-    _rewardedAd!.show(
-      onUserEarnedReward: (ad, reward) async {
-        try {
-          await _api.watchAdBonus();
-          await _requestImageReaction(imageFile, caption);
-        } catch (e) {
-          _showError("couldn't unlock bonus messages, try again");
-        }
-      },
-    );
+    _showRewardedAd(() => _requestImageReaction(imageFile, caption));
   }
 
   // ============================================================
@@ -1498,6 +1510,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _showError(String message) {
+    // Often called after a network wait -- the screen may be gone.
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
