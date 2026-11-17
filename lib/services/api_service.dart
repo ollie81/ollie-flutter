@@ -1237,6 +1237,32 @@ class ApiService {
     }
   }
 
+  /// Reports one of Ollie's replies (POST /chat/report). Google Play
+  /// requires an in-app way to flag offensive AI output. A saved reply
+  /// is sent by id, so the server stores its own copy of the text; a
+  /// reply that was never saved (a greeting shown on an empty chat)
+  /// goes by its text instead.
+  Future<void> reportReply({
+    String? messageId,
+    required String messageText,
+    required String reason,
+    String? details,
+  }) async {
+    final response = await _authRequest(
+      method: 'POST',
+      endpoint: '/chat/report',
+      body: {
+        if (messageId != null) 'message_id': messageId,
+        'message_text': messageText,
+        'reason': reason,
+        if (details != null) 'details': details,
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Couldn't send the report. Please try again.");
+    }
+  }
+
   Future<Map<String, dynamic>> getUsage() async {
     final response = await _authRequest(
       method: 'GET',

@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../config/store_build.dart';
 import '../services/api_service.dart';
 import '../utils/ad_reward.dart';
+import '../widgets/report_reply.dart';
 import '../widgets/voice_record_button.dart';
 import 'auth_screen.dart';
 import 'paywall_screen.dart';
@@ -50,6 +51,10 @@ class ChatMessage {
   // (not the daily-limit case, which already has its own recovery
   // sheet). Never true for an Ollie message.
   bool failed = false;
+  // Set once the user reports this Ollie reply (see _reportReply), so
+  // its flag stays filled in. Local only -- a reload from history
+  // starts clean, and the server keeps the report either way.
+  bool reported = false;
   ChatMessage({
     required this.text,
     required this.isOllie,
@@ -621,7 +626,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _showMessageActions(ChatMessage message) {
     final canReply = message.id != null;
     final canCopy = message.text.trim().isNotEmpty;
-    if (!canReply && !canCopy) return;
+    final canReport = message.isOllie && canCopy && !message.reported;
+    if (!canReply && !canCopy && !canReport) return;
 
     showModalBottomSheet(
       context: context,
@@ -664,12 +670,58 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       _copyMessage(message);
                     },
                   ),
+                if (canReport) ...[
+                  const SizedBox(height: 10),
+                  _buildAttachmentOption(
+                    icon: Icons.outlined_flag_rounded,
+                    label: 'Report',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _reportReply(message);
+                    },
+                  ),
+                ],
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  // Google Play's AI-generated content policy: people must be able to
+  // report an offensive reply without leaving the app. Reached from
+  // the flag beside every Ollie reply and from the long-press menu.
+  Future<void> _reportReply(ChatMessage message) async {
+    if (message.reported) return;
+    final choice = await showReportReplySheet(context);
+    if (choice == null || !mounted || message.reported) return;
+    // Filled in straight away so the flag can't be tapped twice while
+    // the request is on its way; undone if it doesn't arrive.
+    setState(() => message.reported = true);
+    try {
+      await _api.reportReply(
+        messageId: message.id,
+        messageText: message.text,
+        reason: choice.reason,
+        details: choice.details,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Thanks for telling us. We'll review this reply."),
+          backgroundColor: const Color(0xFF1A1035),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => message.reported = false);
+      _showError("Couldn't send the report. Check your connection and try again.");
+    }
   }
 
   Future<void> _openSearch() async {
@@ -2059,11 +2111,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-                    // Speaker only on Ollie messages (and not on the
-                    // Play Store build, where voice is "coming soon").
-                    if (message.isOllie && !voiceComingSoon) ...[
+                    // Ollie's replies get the speaker (not on the Play
+                    // Store build, where voice is "coming soon") and a
+                    // report flag in both builds -- Google Play wants
+                    // AI replies reportable from inside the app.
+                    if (message.isOllie) ...[
                       const SizedBox(width: 8),
-                      _buildSpeakerControl(message),
+                      if (!voiceComingSoon) _buildSpeakerControl(message),
+                      ReportFlagButton(
+                        reported: message.reported,
+                        onTap: () => _reportReply(message),
+                      ),
                     ],
                   ],
                 ),
